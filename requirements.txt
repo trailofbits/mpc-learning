@@ -7,7 +7,6 @@ isort==4.3.21
 lazy-object-proxy==1.4.1
 mccabe==0.6.1
 more-itertools==7.1.0
--e git+https://github.com/trailofbits/mpc-learning@94078a3da81b797540a0cb70538c6525cde44c4c#egg=MPC_learning
 numpy==1.16.4
 packaging==19.0
 pandas==0.24.2
