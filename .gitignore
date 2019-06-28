@@ -1,2 +1,8 @@
+# virtual environment
 .venv/
+
+# visual studio code configuration
 .vscode/
+
+# setup egg-info
+MPC_learning.egg-info/
