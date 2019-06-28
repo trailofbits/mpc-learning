@@ -29,9 +29,10 @@
 # b -> output1
 # the additional intermediate wires will be given the lable zi for all i
 
-# we use the following gate labels: ADD, MULT, COMP, DOT, and NOT
+# we use the following gate labels: ADD, MULT, SMULT, COMP, DOT, and NOT
 # ADD is the addition gate
 # MULT is the multiplication gate
+# SMULT is the scalar multiplication gate
 # COMP is the comparison gate, which computes the boolean (input <= 0)
 # DOT is the dot product gate, which computes the dot product of two inputs
 # NOT is the not gate, which computes 1 - input (input 0 or 1 here)
@@ -46,6 +47,19 @@ bo = "output1"
 
 circuit = {}
 
+# specify input, intermediate, and output wires
+circuit["input"] = [x,y,wi,bi]
+circuit["output"] = [wo,bo]
+wires = []
+for i in range(12):
+    wires.append("z"+str(i))
+circuit["wires"] = wires
+
+# specify order of gates to be evaluated
+gate_order = []
+for i in range(14):
+    gate_order.append("g"+str(i))
+
 # gate for dot product of x and w
 circuit["g0"] = {"type": "DOT", "input": [x, wi], "output": ["z0"]}
 
@@ -53,13 +67,13 @@ circuit["g0"] = {"type": "DOT", "input": [x, wi], "output": ["z0"]}
 circuit["g1"] = {"type": "ADD", "input": [bi, "z0"], "output": ["z1"]}
 
 # gate for multiplying y with b + dot(x,w)
-circuit["g2"] = {"type": "MULT", "input": [y, "z1"], "output": ["z2"]}
+circuit["g2"] = {"type": "SMULT", "input": [y, "z1"], "output": ["z2"]}
 
 # gate for computing y(b + dot(x,w)) <= 0
 circuit["g3"] = {"type": "COMP", "input": ["z2"], "output": ["z3"]}
 
-# gate for computing x*y for conditional assignment to w
-circuit["g4"] = {"type": "NOT", "input": [x, y], "output": ["z4"]}
+# gate for computing y*x for conditional assignment to w
+circuit["g4"] = {"type": "SMULT", "input": [y, x], "output": ["z4"]}
 
 # gate for computing w + x*y for conditional assignment to w
 circuit["g5"] = {"type": "ADD", "input": [wi, "z4"], "output": ["z5"]}
@@ -87,5 +101,3 @@ circuit["g12"] = {"type": "MULT", "input": [bi, "z7"], "output": ["z11"]}
 
 # gate for computing output for b
 circuit["g13"] = {"type": "ADD", "input": ["z10", "z11"], "output": [bo]}
-
-# print(circuit)
