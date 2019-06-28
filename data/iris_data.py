@@ -22,9 +22,16 @@ def get_iris_data():
     y_vals = df.iloc[:, 4].values
     y_vals = np.where(y_vals == 'Iris-setosa', -1, 1)
 
+    size = len(x_vals)
+
     data = []
 
-    for i in range(len(x_vals)):
-        data[i] = (x_vals, y_vals)
+    # randomize ordering of data
+    np.random.seed(10)
+    random_indices = np.random.permutation(size)
+
+    for i in range(size):
+        cur_index = random_indices[i]
+        data.append((x_vals[cur_index], y_vals[cur_index]))
 
     return data
