@@ -5,9 +5,6 @@ class Evaluator:
         self.circuit = circuit
         self.gate_order = gate_order
 
-
-
-class BasicEvaluator(Evaluator):
     def prep_eval(self):
         self.inputs = self.circuit["input"]
         self.outputs = self.circuit["output"]
@@ -43,7 +40,27 @@ class BasicEvaluator(Evaluator):
                 self._comp(gate_input,gate_output)
             else:
                 raise(Exception('{} is not a valid gate type'.format(gate_type)))
-            
+
+    def _add(self, wire_in, wire_out):
+        pass
+
+    def _mult(self, wire_in, wire_out):
+        pass
+
+    def _smult(self, wire_in, wire_out):
+        pass
+
+    def _dot(self, wire_in, wire_out):
+        pass
+
+    def _not(self, wire_in, wire_out):
+        pass
+
+    def _comp(self, wire_in, wire_out):
+        pass
+
+
+class BasicEvaluator(Evaluator):    
     def _add(self, wire_in, wire_out):
         [x,y] = wire_in
         [z] = wire_out
