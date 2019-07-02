@@ -4,7 +4,7 @@
 import numpy as np
 
 
-def perceptron(data, num_iterations, initial_w=0, initial_b=0):
+def perceptron(data, num_iterations, modulus, initial_w=0, initial_b=0, fp_precision=16):
     """
     Takes data (assumed to be an iterable of pairs (x,y)) and runs the
     perceptron algorithm for the number of iterations specified. We
@@ -19,10 +19,14 @@ def perceptron(data, num_iterations, initial_w=0, initial_b=0):
         Data to be input into algorithm (assumed iterable pairs)
     num_iterations: int
         Number of iterations that algorithm will run for
+    modulus: int
+        Value representing the modulus of field used
     (optional) initial_w=0: int
         Initial value of w, parameter of perceptron algorithm
     (optional) initial_b=0: int
         Initial value of b, parameter of perceptron algorithm
+    (optional) fp_precision=8: int
+        Fixed point number precision
 
     Returns
     -------
@@ -40,15 +44,33 @@ def perceptron(data, num_iterations, initial_w=0, initial_b=0):
     w = initial_w
     b = initial_b
 
+    # use fixed point numbers
+    # input data should be scaled up by 10^fp_precision
+    # also scale down by 10^fp_precision after every mult
+    scale = 10**fp_precision
+
     for i in range(num_iterations):
+
+        #print("w: ",str(w))
+        #print("b: ",str(b))
         
         np_x = np.array(data[i][0])
         y = data[i][1]
 
+        # we use fixed point, so multiply by precision and round to integer
+        for a in range(len(np_x)):
+            np_x[a] = int( np_x[a] * scale)
+        y = int( y * scale)
+
         # if point misclassified, update w and b, else do nothing
-        if y * (np.dot(np_x, w) + b) <= 0:
-            w += y * np_x
+        xw_dot = np.dot(np_x,w) / scale
+        if (y * (xw_dot + b)) / scale <= 0:
+            w += (y * np_x) / scale
             b += y
+
+
+    w = w / scale
+    b = b / scale
 
     return (w, b)
 
@@ -60,4 +82,4 @@ if __name__ == "__main__":
 
     num_iter = len(data)
 
-    print(perceptron(data,num_iter))
+    print(perceptron(data,num_iter,2**128))

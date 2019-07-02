@@ -1,11 +1,11 @@
 import numpy as np
 
 class Evaluator:
-    def __init__(self, circuit, gate_order):
+    def __init__(self, circuit, gate_order, fp_precision=16):
         self.circuit = circuit
         self.gate_order = gate_order
+        self.scale = 10**fp_precision
 
-    def prep_eval(self):
         self.inputs = self.circuit["input"]
         self.outputs = self.circuit["output"]
         self.wire_dict = {}
@@ -61,6 +61,81 @@ class Evaluator:
 
 
 class BasicEvaluator(Evaluator):    
+    def _add(self, wire_in, wire_out):
+        [x,y] = wire_in
+        [z] = wire_out
+
+        x_val = self.wire_dict[x]
+        y_val = self.wire_dict[y]
+
+        self.wire_dict[z] = x_val + y_val
+
+    def _mult(self, wire_in, wire_out):
+        [x,y] = wire_in
+        [z] = wire_out
+
+        x_val = self.wire_dict[x]
+        y_val = self.wire_dict[y]
+
+        self.wire_dict[z] = (x_val * y_val) / self.scale
+
+    def _smult(self, wire_in, wire_out):
+        [x,y] = wire_in
+        [z] = wire_out
+
+        x_val = self.wire_dict[x]
+        y_val = np.array(self.wire_dict[y])
+
+        self.wire_dict[z] = (x_val * y_val) / self.scale
+
+    def _dot(self, wire_in, wire_out):
+        [x,y] = wire_in
+        [z] = wire_out
+
+        x_val = np.array(self.wire_dict[x])
+        y_val = np.array(self.wire_dict[y])
+        
+        self.wire_dict[z] = (np.dot(x_val,y_val)) / self.scale
+
+    def _not(self, wire_in, wire_out):
+        [x] = wire_in
+        [z] = wire_out
+
+        x_val = self.wire_dict[x]
+
+        self.wire_dict[z] = self.scale - x_val
+
+    def _comp(self, wire_in, wire_out):
+        [x] = wire_in
+        [z] = wire_out
+
+        x_val = self.wire_dict[x]
+
+        self.wire_dict[z] = x_val <= 0
+
+    def get_outputs(self):
+        outs = []
+        for out in self.outputs:
+            outs.append(self.wire_dict[out])
+        return outs
+
+class SecureEvaluator(Evaluator):
+
+    def __init__(self,circuit,gate_order,party_index,dealer,oracle):
+        Evaluator.__init__(self,circuit,gate_order)
+        self.party_index = party_index
+        self.dealer = dealer
+        self.oracle = oracle
+
+    def add_parties(self,parties):
+        self.parties = {}
+        self.parties[self.party_index] = self
+        for (party,party_index) in parties:
+            if party_index in self.parties:
+                raise Exception("Party number: {} already exists".format(party_index))
+            else:
+                self.parties[party_index] = party
+
     def _add(self, wire_in, wire_out):
         [x,y] = wire_in
         [z] = wire_out
