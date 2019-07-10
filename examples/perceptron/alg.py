@@ -50,9 +50,6 @@ def perceptron(data, num_iterations, modulus, initial_w=0, initial_b=0, fp_preci
     scale = 10**fp_precision
 
     for i in range(num_iterations):
-
-        #print("w: ",str(w))
-        #print("b: ",str(b))
         
         np_x = np.array(data[i][0])
         y = data[i][1]

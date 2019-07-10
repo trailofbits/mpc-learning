@@ -67,7 +67,8 @@ circuit["g0"] = {"type": "DOT", "input": [x, wi], "output": ["z0"]}
 circuit["g1"] = {"type": "ADD", "input": [bi, "z0"], "output": ["z1"]}
 
 # gate for multiplying y with b + dot(x,w)
-circuit["g2"] = {"type": "SMULT", "input": [y, "z1"], "output": ["z2"]}
+#circuit["g2"] = {"type": "SMULT", "input": [y, "z1"], "output": ["z2"]}
+circuit["g2"] = {"type": "MULT", "input": [y, "z1"], "output": ["z2"]}
 
 # gate for computing y(b + dot(x,w)) <= 0
 circuit["g3"] = {"type": "COMP", "input": ["z2"], "output": ["z3"]}
@@ -85,10 +86,12 @@ circuit["g6"] = {"type": "ADD", "input": [bi, y], "output": ["z6"]}
 circuit["g7"] = {"type": "NOT", "input": ["z3"], "output": ["z7"]}
 
 # gate for computing if conditional assignment to w
-circuit["g8"] = {"type": "MULT", "input": ["z3", "z5"], "output": ["z8"]}
+#circuit["g8"] = {"type": "MULT", "input": ["z3", "z5"], "output": ["z8"]}
+circuit["g8"] = {"type": "SMULT", "input": ["z3", "z5"], "output": ["z8"]}
 
 # gate for computing else conditional assignment to w
-circuit["g9"] = {"type": "MULT", "input": [wi, "z7"], "output": ["z9"]}
+#circuit["g9"] = {"type": "MULT", "input": [wi, "z7"], "output": ["z9"]}
+circuit["g9"] = {"type": "SMULT", "input": ["z7", wi], "output": ["z9"]}
 
 # gate for computing output for w
 circuit["g10"] = {"type": "ADD", "input": ["z8", "z9"], "output": [wo]}
