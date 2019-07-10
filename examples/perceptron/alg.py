@@ -25,7 +25,7 @@ def perceptron(data, num_iterations, modulus, initial_w=0, initial_b=0, fp_preci
         Initial value of w, parameter of perceptron algorithm
     (optional) initial_b=0: int
         Initial value of b, parameter of perceptron algorithm
-    (optional) fp_precision=8: int
+    (optional) fp_precision=16: int
         Fixed point number precision
 
     Returns
