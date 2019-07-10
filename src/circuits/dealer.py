@@ -2,6 +2,80 @@ import random
 import numpy as np
 
 class Dealer():
+    """
+    Dealer class that is responsible for creating input shares for the
+    SecureEvaluators.
+
+    Methods
+    -------
+    __init__(self, parties, modulus, fp_precision=16)
+        Dealer object constructor
+        Initliaze parties, mod, modulus, and fp_precision
+
+        Parameters
+        ----------
+        parties: iterable
+            Iterable of Evaluators
+        modulus: integer
+            Modulus representing input domain
+        (optional) fp_precision=16: int
+            Fixed point number precision
+
+    generate_randomness(self, number_of_values)
+        Method that generates number_of_values random values for parties
+        According to current protocol, each party receives a value x_i
+        such that x_1 + x_2 + x_3 = 0
+
+        Parameters
+        ----------
+        number_of_values: int
+            Number of random shares to be generated
+
+    distribute_shares(self, inputs, random=False, verbose=False)
+        Method that generates shares of inputs and sends the shares
+        to the three parties
+
+        Parameters
+        ----------
+        inputs: iterable
+            Iterable of input values to be converted to shares
+        (optional) random=False: boolean
+            Boolean indicating whether we are creating shares of inputs
+            or shares for generate_randomness
+        (optional) verbose=False: boolean
+            Boolean to turn on verbose mode for debugging
+        
+    _make_shares(self, input_value)
+        Method for generating shares from an input value (called within
+        distribute_shares)
+
+        Parameters
+        ----------
+        input_value: int or iterable
+            Value to be made into shares and sent to parties
+        
+    _send_shares(self, shares, receiver)
+        Method for sending shares to parties (called within distribute_shares)
+
+        Parameters
+        ----------
+        shares: iterable
+            Iterable of values/shares to be sent to parties
+        receiver: Evaluator object
+            Evaluator (party) that will receive shares
+
+    _send_randomness(self, shares, receiver)
+        Method for sending randomness to parties (called within 
+        generate_randomness)
+
+        Parameters
+        ----------
+        shares: iterable
+            Iterable of values/shares to be sent to parties
+        receiver: Evaluator object
+            Evaluator (party) that will receive shares
+            
+    """
     def __init__(self,parties,modulus,fp_precision=16):
         self.parties = parties
         self.mod = modulus
@@ -9,14 +83,11 @@ class Dealer():
         self.modulus = modulus / self.scale
 
     def generate_randomness(self,number_of_values):
-
         inputs = []
         for i in range(number_of_values):
             inputs.append(0)
 
         self.distribute_shares(inputs,random=True)
-        
-        
 
     def distribute_shares(self,inputs, random=False, verbose=False):
         # generate and send shares to each party
@@ -50,8 +121,6 @@ class Dealer():
             else:
                 self._send_shares(shares[i],party)
 
-        
-    
     def _make_shares(self,input_value):
         it = type(input_value)
         if (it == int) or (it == np.int64) or (it == np.float64) or (it == float):
@@ -68,14 +137,10 @@ class Dealer():
             share2 = (b,a-val)
             share3 = (c,b-val)
 
-            
-
         else:
             share1 = []
             share2 = []
             share3 = []
-
-            
 
             for val in input_value:
                 val = int(val*self.scale)

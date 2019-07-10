@@ -2,21 +2,117 @@ import random
 from src.circuits.dealer import Dealer
 
 class Oracle(Dealer):
+    """
+    Oracle class that inherits from the Dealer class (to create shares).
+    The Oracle is responsible for receiving shares from the parties, performing
+    an operation (either MULT, SMULT, DOT, or COMP), creating new shares for
+    the results and sending them to the parties.
+
+    Methods
+    -------
+    __init__(self, modulus, fp_precision=16)
+        Constructor for Dealer object.
+        Calls the Dealer constructor and initializes shares and outputs.
+
+        Parameters
+        ----------
+        modulus: int
+            Modulus representing input domain
+        (optional) fp_precision=16: int
+            Fixed point number precision
+
+    send_op(self, values, pindex, rindex, op)
+        Method for performing an operation for the parties
+
+        Parameters
+        ----------
+        values: int or iterable
+            Inputs to be used for performing operation
+        pindex: int
+            Index of party sending the value (must be 1, 2, or 3)
+        rindex: int
+            Index to keep track of which values to use
+        op: string
+            String indicating which operation to perform
+            Must be "MULT", "DOT", "COMP", or "SMULT"
+
+    receive_op(self, pindex, rindex)
+        Method for distributing shares of result of operation to parties
+
+        Parameters
+        ----------
+        pindex: int
+            Index of party receiving the value
+        rindex: int
+            Index to keep track of which values to use
+
+        Returns
+        -------
+        "wait"
+            Value returned if all parties have not yet contributed shares
+        self.outputs[rindex][pindex]
+            Share of result of operation to be sent to party
+
+    _mult(self, rindex)
+        Method specifying how to compute multiplication
+
+        Parameters
+        ----------
+        rindex: int
+            Index to keep track of which values to use
+
+    _dot(self, rindex)
+        Method specifying how to compute dot product
+
+        Parameters
+        ----------
+        rindex: int
+            Index to keep track of which values to use
+        
+    _comp(self, rindex)
+        Method specifying how to compute comparison (input <= 0)
+
+        Parameters
+        ----------
+        rindex: int
+            Index to keep track of which values to use
+
+    _smult(self, rindex)
+        Method specifying how to compute scalar multiplication
+
+        Parameters
+        ----------
+        rindex: int
+            Index to keep track of which values to use
+                
+    """
     def __init__(self,modulus,fp_precision=16):
         Dealer.__init__(self,[],modulus,fp_precision)
         self.shares = {}
         self.outputs = {}
-    
-    def add_parties(self,parties):
-        self.parties = parties
 
-    def send_mult(self,values,pindex,rindex):
+    def send_op(self,values,pindex,rindex,op):
         if rindex not in self.shares:
             self.shares[rindex] = {pindex: values}
         else:
             self.shares[rindex][pindex] = values
 
-        self._mult(rindex)
+        if op == "MULT":
+            self._mult(rindex)
+        elif op == "DOT":
+            self._dot(rindex)
+        elif op == "COMP":
+            self._comp(rindex)
+        elif op == "SMULT":
+            self._smult(rindex)
+
+    def receive_op(self,pindex,rindex):
+        if rindex not in self.outputs:
+            return "wait"
+        if self.outputs[rindex] == "wait":
+            return "wait"
+        else:
+            return self.outputs[rindex][pindex]
 
     def _mult(self,rindex):
         shrs = self.shares[rindex]
@@ -31,34 +127,9 @@ class Oracle(Dealer):
             x_val = x1 - a2
             y_val = y1 - b2
 
-            #print("x_val: " + str(x_val))
-            #print("y_val: " + str(y_val))
-
             z = (x_val / self.scale) * (y_val / self.scale)
-            #print("mult z: " + str(z))
             [sh1,sh2,sh3] = self._make_shares(z)
-            #print("sh1: " + str(sh1))
-            #print("sh2: " + str(sh2))
-            #print("sh3: " + str(sh3))
-            #print("mult z shares: " + str([sh1,sh2,sh3]))
             self.outputs[rindex] = {1: sh1, 2: sh2, 3: sh3}
-
-    
-    def receive_mult(self,pindex,rindex):
-        if rindex not in self.outputs:
-            return "wait"
-        if self.outputs[rindex] == "wait":
-            return "wait"
-        else:
-            #print("about to return: " + str(self.outputs[rindex][pindex]))
-            return self.outputs[rindex][pindex]
-
-    def send_dot(self,values,pindex,rindex):
-        if rindex not in self.shares:
-            self.shares[rindex] = {pindex: values}
-        else:
-            self.shares[rindex][pindex] = values
-        self._dot(rindex)
 
     def _dot(self,rindex):
         shrs = self.shares[rindex]
@@ -83,22 +154,6 @@ class Oracle(Dealer):
             [sh1,sh2,sh3] = self._make_shares(z / self.scale)
             self.outputs[rindex] = {1: sh1, 2: sh2, 3: sh3}
 
-    def receive_dot(self,pindex,rindex):
-        if rindex not in self.outputs:
-            return "wait"
-        if self.outputs[rindex] == "wait":
-            return "wait"
-        else:
-            return self.outputs[rindex][pindex]
-
-    def send_comp(self,values,pindex,rindex):
-        if rindex not in self.shares:
-            self.shares[rindex] = {pindex: values}
-        else:
-            self.shares[rindex][pindex] = values
-
-        self._comp(rindex)
-
     def _comp(self,rindex):
         shrs = self.shares[rindex]
         if (1 not in shrs) or (2 not in shrs) or (3 not in shrs):
@@ -114,22 +169,6 @@ class Oracle(Dealer):
 
             [sh1,sh2,sh3] = self._make_shares(z)
             self.outputs[rindex] = {1: sh1, 2: sh2, 3: sh3}
-
-    def receive_comp(self,pindex,rindex):
-        if rindex not in self.outputs:
-            return "wait"
-        if self.outputs[rindex] == "wait":
-            return "wait"
-        else:
-            return self.outputs[rindex][pindex]
-
-    def send_smult(self,values,pindex,rindex):
-        if rindex not in self.shares:
-            self.shares[rindex] = {pindex: values}
-        else:
-            self.shares[rindex][pindex] = values
-
-        self._smult(rindex)
 
     def _smult(self,rindex):
         shrs = self.shares[rindex]
@@ -158,11 +197,3 @@ class Oracle(Dealer):
 
             [sh1,sh2,sh3] = self._make_shares(z)
             self.outputs[rindex] = {1: sh1, 2: sh2, 3: sh3}
-
-    def receive_smult(self,pindex,rindex):
-        if rindex not in self.outputs:
-            return "wait"
-        if self.outputs[rindex] == "wait":
-            return "wait"
-        else:
-            return self.outputs[rindex][pindex]
