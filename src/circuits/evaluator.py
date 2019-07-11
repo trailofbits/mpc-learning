@@ -526,11 +526,13 @@ class SecureEvaluator(Evaluator):
     def add_parties(self,parties):
         self.parties = {}
         self.parties[self.party_index] = self
-        for (party,party_index) in parties:
-            if party_index in self.parties:
-                raise Exception("Party number: {} already exists".format(party_index))
+        for pindex in parties:
+            if pindex == self.party_index:
+                continue
+            if pindex in self.parties:
+                raise Exception("Party number: {} already exists".format(pindex))
             else:
-                self.parties
+                self.parties[pindex] = parties[pindex]
 
     def receive_randomness(self,random_values):
         self.randomness = random_values
@@ -724,3 +726,48 @@ class SecureEvaluator(Evaluator):
 
     def get_wire_dict(self):
         return self.wire_dict
+
+class S_Evaluator_0_1(SecureEvaluator):
+
+    def _mult(self, wire_in, wire_out):
+        [x,y] = wire_in
+        [z] = wire_out
+
+        rindex = self.random_index
+        cur_random_val = self.randomness[rindex]
+
+        (x_val,a_val) = self.wire_dict[x]
+        (y_val,b_val) = self.wire_dict[y]
+
+        print("rindex: " + str(rindex) + " pindex: " + str(self.party_index) + " old shares: " + str(self.wire_dict[x]) + " " + str(self.wire_dict[y]))
+
+        r = int(a_val / self.scale) * int(b_val / self.scale)
+        #print("rindex: " + str(rindex) + " pindex: " + str(self.party_index) + " r1: " + str(r))
+        r -= int(x_val / self.scale) * int(y_val / self.scale)
+        #print("rindex: " + str(rindex) + " pindex: " + str(self.party_index) + " r2: " + str(r))
+        r += int(cur_random_val)
+        #print("rindex: " + str(rindex) + " pindex: " + str(self.party_index) + " r3: " + str(r))
+        r = int(r / 3)
+        #print("rindex: " + str(rindex) + " pindex: " + str(self.party_index) + " r4: " + str(r))
+
+        print("rindex: " + str(rindex) + " pindex: " + str(self.party_index) + " r: " + str(r))
+
+        if self.party_index == 1:
+            self._send_share(r,2,self.random_index)
+        elif self.party_index == 2:
+            self._send_share(r,3,self.random_index)
+        elif self.party_index == 3:
+            self._send_share(r,1,self.random_index)
+
+        # must wait until we receive share from party
+        while self.interaction[self.random_index] == "wait":
+            pass
+
+        new_r = self.interaction[self.random_index]
+
+        #print(new_r)
+
+        self.wire_dict[z] = (int(new_r - r), int(-2 * new_r - r))
+        print("rindex: " + str(rindex) + " pindex: " + str(self.party_index) + " new share: " + str(self.wire_dict[z]))
+
+        self.random_index += 1

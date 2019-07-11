@@ -1,5 +1,6 @@
 from src.circuits.evaluator import BasicEvaluator
 from src.circuits.evaluator import SecureEvaluator
+from src.circuits.evaluator import S_Evaluator_0_1
 from src.circuits.dealer import Dealer
 from src.circuits.oracle import Oracle
 import circuit
@@ -114,6 +115,119 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     evaluator3 = SecureEvaluator(circuit.circuit,circuit.gate_order,3,oracle)
 
     parties = [evaluator1,evaluator2,evaluator3]
+
+    # initialize dealer
+    dealer = Dealer(parties,modulus,fp_precision=fp_precision)
+
+    # split x_data and y_data into 3 lists, one for each party
+    # this simulates each party having private input data
+    data_len = len(data)
+    data1x = []
+    data2x = []
+    data3x = []
+    data1y = []
+    data2y = []
+    data3y = []
+
+    split = int(data_len/3)
+
+    for i in range(split):
+        data1x.append(data[i][0])
+        data1y.append(data[i][1])
+        data2x.append(data[split + i][0])
+        data2y.append(data[split + i][1])
+        data3x.append(data[2*split + 1][0])
+        data3y.append(data[2*split + 1][1])
+
+    # use dealer to create shares of all inputs
+    dealer.distribute_shares(data1x)
+    dealer.distribute_shares(data2x)
+    dealer.distribute_shares(data3x)
+
+    dealer.distribute_shares(data1y)
+    dealer.distribute_shares(data2y)
+    dealer.distribute_shares(data3y)
+
+    # use dealer to create random values for interactive operations
+    num_randomness = 12 * num_iterations
+    dealer.generate_randomness(num_randomness)
+
+    # need to make dimenions of w the same as x
+    if initial_w == 0:
+        first_x = data[0][0]
+        initial_w = np.zeros(len(first_x))
+    initial_w = [initial_w,[]]
+
+    dealer.distribute_shares(initial_w)
+    dealer.distribute_shares(initial_b)
+
+    results = {}
+
+    # for each iteration of perceptron algorithm, have each SecureEvaluator
+    # compute the circuit, each on their own thread, so they can interact
+    for i in range(num_iterations):
+        
+        t1 = Thread(target=run_eval,args=(evaluator1,i,data_len,results,1,fp_precision))
+        t2 = Thread(target=run_eval,args=(evaluator2,i,data_len,results,2,fp_precision))
+        t3 = Thread(target=run_eval,args=(evaluator3,i,data_len,results,3,fp_precision))
+
+        t1.start()
+        t2.start()
+        t3.start()
+
+        t1.join()
+        t2.join()
+        t3.join()
+
+    # extract final outputs, scale them down
+    (w,b) = get_w_b(results)
+    return (w / scale, b / scale)
+
+def secure_0_1_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_precision=16):
+    """
+    Function that evaluates the perceptron circuit using three S_0_1_Evaluator
+    objects. The current protocol also requires a Dealer and an Oracle.
+
+    Parameters
+    ----------
+    data: iterable
+        Data to be input into the perceptron algorithm (assumed iterable pairs)
+    num_iterations: int
+        Number of iterations that algorithm will run for
+    modulus: int
+        Value representing the modulus of field used
+    (optional) initial_w=0: int
+        Initial value of w, parameter of perceptron algorithm
+    (optional) initial_b=0: int
+        Initial value of b, parameter of perceptron algorithm
+    (optional) fp_precision=16: int
+        Fixed point number precision
+
+    Returns
+    -------
+    w: float
+        w value achieved after num_iterations of perceptron
+    b: int
+        b value achieved after num_iterations of perceptron
+    """
+
+    # account for fixed point precision
+    scale = 10**fp_precision
+
+    # initialize oracle
+    oracle = Oracle(modulus,fp_precision=fp_precision)
+
+    # initialize evaluators
+    evaluator1 = S_Evaluator_0_1(circuit.circuit,circuit.gate_order,1,oracle)
+    evaluator2 = S_Evaluator_0_1(circuit.circuit,circuit.gate_order,2,oracle)
+    evaluator3 = S_Evaluator_0_1(circuit.circuit,circuit.gate_order,3,oracle)
+
+    parties = [evaluator1,evaluator2,evaluator3]
+    party_dict = {1: evaluator1, 2: evaluator2, 3: evaluator3}
+
+    evaluator1.add_parties(party_dict)
+    evaluator2.add_parties(party_dict)
+    evaluator3.add_parties(party_dict)
 
     # initialize dealer
     dealer = Dealer(parties,modulus,fp_precision=fp_precision)
@@ -298,3 +412,5 @@ if __name__ == "__main__":
     print(eval_circuit(data,num_iter))
 
     print(secure_eval_circuit(data,num_iter,10**32,fp_precision=16))
+    
+    #print(secure_0_1_eval_circuit(data,num_iter,10**32,fp_precision=16))

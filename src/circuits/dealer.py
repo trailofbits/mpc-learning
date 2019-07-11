@@ -1,4 +1,4 @@
-import random
+from random import randint
 import numpy as np
 
 class Dealer():
@@ -97,7 +97,7 @@ class Dealer():
         shares_for_3 = []
         
         if (type(inputs) == int) or (type(inputs) == float):
-            (sh1,sh2,sh3) = self._make_shares(inputs)
+            (sh1,sh2,sh3) = self._make_shares(inputs, random=random)
             shares_for_1.append(sh1)
             shares_for_2.append(sh2)
             shares_for_3.append(sh3)
@@ -108,7 +108,7 @@ class Dealer():
                     print("val: " + str(val))
                 if val == []:
                     continue
-                (sh1,sh2,sh3) = self._make_shares(val)
+                (sh1,sh2,sh3) = self._make_shares(val, random=random)
                 shares_for_1.append(sh1)
                 shares_for_2.append(sh2)
                 shares_for_3.append(sh3)
@@ -121,21 +121,25 @@ class Dealer():
             else:
                 self._send_shares(shares[i],party)
 
-    def _make_shares(self,input_value):
+    def _make_shares(self,input_value, random=False):
         it = type(input_value)
         if (it == int) or (it == np.int64) or (it == np.float64) or (it == float):
-            
             
             val = int(input_value*self.scale)
             
             # first generate three random values a, b, c s.t. a + b + c = 0
-            a = int(random.randint(0,self.modulus-1) * self.scale)
-            b = int(random.randint(0,self.modulus-1) * self.scale)
+            a = int(randint(0,self.modulus-1) * self.scale)
+            b = int(randint(0,self.modulus-1) * self.scale)
             c = - (a + b)
 
-            share1 = (a,c-val)
-            share2 = (b,a-val)
-            share3 = (c,b-val)
+            if random:
+                share1 = a
+                share2 = b
+                share3 = c
+            else:
+                share1 = (a,c-val)
+                share2 = (b,a-val)
+                share3 = (c,b-val)
 
         else:
             share1 = []
@@ -146,13 +150,18 @@ class Dealer():
                 val = int(val*self.scale)
                 
                 # first generate three random values a, b, c s.t. a + b + c = 0
-                a = int(random.randint(0,self.modulus-1) * self.scale)
-                b = int(random.randint(0,self.modulus-1) * self.scale)
+                a = int(randint(0,self.modulus-1) * self.scale)
+                b = int(randint(0,self.modulus-1) * self.scale)
                 c = - (a + b)
                 
-                share1.append((a,c-val))
-                share2.append((b,a-val))
-                share3.append((c,b-val))
+                if random:
+                    share1.append(a)
+                    share2.append(b)
+                    share3.append(c)
+                else:
+                    share1.append((a,c-val))
+                    share2.append((b,a-val))
+                    share3.append((c,b-val))
 
         return (share1,share2,share3)
 
