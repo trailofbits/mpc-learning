@@ -1,5 +1,7 @@
 from random import randint
 import numpy as np
+from src.circuits.share import Share
+import math
 
 class Dealer():
     """
@@ -80,7 +82,7 @@ class Dealer():
         self.parties = parties
         self.mod = modulus
         self.scale = 10**fp_precision
-        self.modulus = modulus / self.scale
+        #self.modulus = modulus / self.scale
 
     def generate_randomness(self,number_of_values):
         inputs = []
@@ -125,21 +127,28 @@ class Dealer():
         it = type(input_value)
         if (it == int) or (it == np.int64) or (it == np.float64) or (it == float):
             
-            val = int(input_value*self.scale)
+            val = int(input_value*self.scale) % self.mod
             
             # first generate three random values a, b, c s.t. a + b + c = 0
-            a = int(randint(0,self.modulus-1) * self.scale)
-            b = int(randint(0,self.modulus-1) * self.scale)
-            c = - (a + b)
+            #a = int(randint(0,self.mod-1) )
+            #b = int(randint(0,self.mod-1) )
+            #c = (- (a + b)) % self.mod
+
+            a = int(randint(0,math.floor(self.mod / self.scale) - 1) * self.scale)
+            b = int(randint(0,math.floor(self.mod / self.scale) - 1) * self.scale)
+            c = (- (a + b)) % self.mod
 
             if random:
                 share1 = a
                 share2 = b
                 share3 = c
             else:
-                share1 = (a,c-val)
-                share2 = (b,a-val)
-                share3 = (c,b-val)
+                #share1 = (a,c-val)
+                #share2 = (b,a-val)
+                #share3 = (c,b-val)
+                share1 = Share(a,c-val,mod=self.mod)
+                share2 = Share(b,a-val,mod=self.mod)
+                share3 = Share(c,b-val,mod=self.mod)
 
         else:
             share1 = []
@@ -147,21 +156,25 @@ class Dealer():
             share3 = []
 
             for val in input_value:
-                val = int(val*self.scale)
+                val = int(val*self.scale) % self.mod
                 
                 # first generate three random values a, b, c s.t. a + b + c = 0
-                a = int(randint(0,self.modulus-1) * self.scale)
-                b = int(randint(0,self.modulus-1) * self.scale)
-                c = - (a + b)
+                #a = int(randint(0,self.mod-1))
+                #b = int(randint(0,self.mod-1))
+                #c = (- (a + b)) % self.mod
+
+                a = int(randint(0,math.floor(self.mod / self.scale) - 1) * self.scale)
+                b = int(randint(0,math.floor(self.mod / self.scale) - 1) * self.scale)
+                c = (- (a + b)) % self.mod
                 
                 if random:
                     share1.append(a)
                     share2.append(b)
                     share3.append(c)
                 else:
-                    share1.append((a,c-val))
-                    share2.append((b,a-val))
-                    share3.append((c,b-val))
+                    share1.append(Share(a,c-val,mod=self.mod))
+                    share2.append(Share(b,a-val,mod=self.mod))
+                    share3.append(Share(c,b-val,mod=self.mod))
 
         return (share1,share2,share3)
 

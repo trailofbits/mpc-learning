@@ -119,13 +119,19 @@ class Oracle(Dealer):
         if (1 not in shrs) or (2 not in shrs) or (3 not in shrs):
             self.outputs[rindex] = "wait"
         else:
-            x1 = shrs[1][0][0]
-            y1 = shrs[1][1][0]
-            a2 = shrs[2][0][1]
-            b2 = shrs[2][1][1]
+            #x1 = shrs[1][0][0]
+            #y1 = shrs[1][1][0]
+            #a2 = shrs[2][0][1]
+            #b2 = shrs[2][1][1]
 
-            x_val = x1 - a2
-            y_val = y1 - b2
+            #x_val = x1 - a2
+            #y_val = y1 - b2
+
+            [x_val1,y_val1] = shrs[1]
+            [x_val2,y_val2] = shrs[2]
+
+            x_val = x_val1.unshare(x_val2)
+            y_val = y_val1.unshare(y_val2)
 
             z = (x_val / self.scale) * (y_val / self.scale)
             [sh1,sh2,sh3] = self._make_shares(z)
@@ -142,13 +148,17 @@ class Oracle(Dealer):
             [xvec2,yvec2] = shrs[2]
 
             for i in range(len(xvec1)):
-                (x1,a1) = xvec1[i]
-                (y1,b1) = yvec1[i]
-                (x2,a2) = xvec2[i]
-                (y2,b2) = yvec2[i]
+                #(x1,a1) = xvec1[i]
+                #(y1,b1) = yvec1[i]
+                #(x2,a2) = xvec2[i]
+                #(y2,b2) = yvec2[i]
 
-                x_val = x1 - a2
-                y_val = y1 - b2
+                #x_val = x1 - a2
+                #y_val = y1 - b2
+
+                x_val = xvec1[i].unshare(xvec2[i])
+                y_val = yvec1[i].unshare(yvec2[i])
+
                 z += (x_val / self.scale) * y_val
 
             [sh1,sh2,sh3] = self._make_shares(z / self.scale)
@@ -161,10 +171,16 @@ class Oracle(Dealer):
         else:
             z = 0
  
-            (x1,a1) = shrs[1][0]
-            (x2,a2) = shrs[2][0]
+            #(x1,a1) = shrs[1][0]
+            #(x2,a2) = shrs[2][0]
 
-            x_val = x1 - a2
+            #x_val = x1 - a2
+
+            [x_val1] = shrs[1]
+            [x_val2] = shrs[2]
+
+            x_val = x_val1.unshare(x_val2)
+
             z = int(x_val <= 0)
 
             [sh1,sh2,sh3] = self._make_shares(z)
@@ -175,23 +191,30 @@ class Oracle(Dealer):
         if (1 not in shrs) or (2 not in shrs) or (3 not in shrs):
             self.outputs[rindex] = "wait"
         else:
-            z = 0
+            #z = 0
  
-            (x1,a1) = shrs[1][0]
-            (x2,a2) = shrs[2][0]
+            #(x1,a1) = shrs[1][0]
+            #(x2,a2) = shrs[2][0]
 
-            yvec1 = shrs[1][1]
-            yvec2 = shrs[2][1]
+            #yvec1 = shrs[1][1]
+            #yvec2 = shrs[2][1]
 
-            x_val = x1 - a2
+            #x_val = x1 - a2
+
+            [x_val1, yvec1] = shrs[1]
+            [x_val2, yvec2] = shrs[2]
+
+            x_val = x_val1.unshare(x_val2)
 
             z = []
 
             for i in range(len(yvec1)):
-                (y1,b1) = yvec1[i]
-                (y2,b2) = yvec2[i]
+                #(y1,b1) = yvec1[i]
+                #(y2,b2) = yvec2[i]
 
-                y_val = y1 - b2
+                #y_val = y1 - b2
+
+                y_val = yvec1[i].unshare(yvec2[i])
 
                 z.append((x_val / self.scale) * (y_val / self.scale))
 

@@ -1,4 +1,5 @@
 import numpy as np
+from src.circuits.share import Share
 
 class Evaluator:
     """
@@ -559,18 +560,12 @@ class SecureEvaluator(Evaluator):
             z_vals = []
 
             for i in range(len(self.wire_dict[x])):
-                (x_val,a_val) = self.wire_dict[x][i]
-                (y_val,b_val) = self.wire_dict[y][i]
-                z_vals.append((x_val + y_val,a_val + b_val))
+                z_vals.append(self.wire_dict[x][i] + self.wire_dict[y][i])
 
             self.wire_dict[z] = z_vals
 
         else:
-
-            (x_val,a_val) = self.wire_dict[x]
-            (y_val,b_val) = self.wire_dict[y]
-
-            self.wire_dict[z] = (x_val + y_val,a_val + b_val)
+            self.wire_dict[z] = self.wire_dict[x] + self.wire_dict[y]
 
     def _mult(self, wire_in, wire_out):
         [x,y] = wire_in
@@ -579,114 +574,99 @@ class SecureEvaluator(Evaluator):
         rindex = self.random_index
         cur_random_val = self.randomness[rindex]
 
-        #(x_val,a_val) = self.wire_dict[x]
-        #(y_val,b_val) = self.wire_dict[y]
-        xa = self.wire_dict[x]
-        yb = self.wire_dict[y]
+        x_val = self.wire_dict[x]
+        y_val = self.wire_dict[y]
 
-        #self.oracle.send_mult([xa,yb],self.party_index,rindex)
-        self.oracle.send_op([xa,yb],self.party_index,rindex,"MULT")
+        r = x_val.pre_mult(y_val, cur_random_val)
 
-        #out_val = self.oracle.receive_mult(self.party_index,rindex)
-        out_val = self.oracle.receive_op(self.party_index,rindex)
-        while out_val == "wait":
-            #out_val = self.oracle.receive_mult(self.party_index,rindex)
-            out_val = self.oracle.receive_op(self.party_index,rindex)
-
-        #r = a_val * b_val / self.scale
-        #r += x_val * y_val / self.scale
-        #r += cur_random_val
-        #r = r / 3
-
-        #if self.party_index == 1:
-        #    self._send_share(r,2,self.random_index)
-        #elif self.party_index == 2:
-        #    self._send_share(r,3,self.random_index)
-        #elif self.party_index == 3:
-        #    self._send_share(r,1,self.random_index)
+        if self.party_index == 1:
+            self._send_share(r,2,self.random_index)
+        elif self.party_index == 2:
+            self._send_share(r,3,self.random_index)
+        elif self.party_index == 3:
+            self._send_share(r,1,self.random_index)
 
         # must wait until we receive share from party
-        #while self.interaction[self.random_index] == "wait":
-        #    pass
+        while self.interaction[self.random_index] == "wait":
+            pass
 
-        #new_r = self.interaction[self.random_index]
-
-        #print(new_r)
-
-        #self.wire_dict[z] = (new_r - r, -2 * new_r - r)
-
-        self.wire_dict[z] = out_val
-
+        new_r = self.interaction[self.random_index]
+        self.wire_dict[z] = Share(new_r - r, -2 * new_r - r)
         self.random_index += 1
 
     def _smult(self, wire_in, wire_out):
         [x,y] = wire_in
         [z] = wire_out
 
-        #(x_val,a_val) = self.wire_dict[x]
-        #(y_val,b_val) = self.wire_dict[y]
+        x_val = self.wire_dict[x]
+        yvec = self.wire_dict[y]
 
-        #z_vals = []
+        z_vals = []
 
-        #for (y_val,b_val) in self.wire_dict[y]:
-        #    z_vals.append((((x_val / self.scale) * y_val),((a_val / self.scale) * b_val)))
+        for i in range(len(yvec)):
+            cur_random_val = self.randomness[self.random_index]
 
-        #self.wire_dict[z] = z_vals
+            y_val = yvec[i]
 
-        rindex = self.random_index
+            r = x_val.pre_mult(y_val, cur_random_val)
 
-        cur_random_val = self.randomness[rindex]
+            if self.party_index == 1:
+                self._send_share(r,2,self.random_index)
+            elif self.party_index == 2:
+                self._send_share(r,3,self.random_index)
+            elif self.party_index == 3:
+                self._send_share(r,1,self.random_index)
 
-        xa = self.wire_dict[x]
-        ybv = self.wire_dict[y]
+            # must wait until we receive share from party
+            while self.interaction[self.random_index] == "wait":
+                pass
 
-        #self.oracle.send_smult([xa,ybv],self.party_index,rindex)
-        self.oracle.send_op([xa,ybv],self.party_index,rindex,"SMULT")
+            new_r = self.interaction[self.random_index]
+            z_vals.append(Share(new_r - r, -2 * new_r - r))
 
-        #out_val = self.oracle.receive_smult(self.party_index,rindex)
-        out_val = self.oracle.receive_op(self.party_index,rindex)
-        while out_val == "wait":
-            #out_val = self.oracle.receive_smult(self.party_index,rindex)
-            out_val = self.oracle.receive_op(self.party_index,rindex)
-        
-        self.wire_dict[z] = out_val
+            self.random_index += 1
 
-        self.random_index += 1
+        self.wire_dict[z] = z_vals
 
     def _dot(self, wire_in, wire_out):
         [x,y] = wire_in
         [z] = wire_out
 
-        rindex = self.random_index
+        xvec = self.wire_dict[x]
+        yvec = self.wire_dict[y]
 
-        cur_random_val = self.randomness[rindex]
+        z_val = Share(0,0)
 
-        (x_val,a_val) = self.wire_dict[x]
-        (y_val,b_val) = self.wire_dict[y]
+        for i in range(len(xvec)):
+            cur_random_val = self.randomness[self.random_index]
 
-        xa = self.wire_dict[x]
-        yb = self.wire_dict[y]
+            x_val = xvec[i]
+            y_val = yvec[i]
 
-        #self.oracle.send_dot([xa,yb],self.party_index,rindex)
-        self.oracle.send_op([xa,yb],self.party_index,rindex,"DOT")
+            r = x_val.pre_mult(y_val, cur_random_val)
 
-        #out_val = self.oracle.receive_dot(self.party_index,rindex)
-        out_val = self.oracle.receive_op(self.party_index,rindex)
-        while out_val == "wait":
-            #out_val = self.oracle.receive_dot(self.party_index,rindex)
-            out_val = self.oracle.receive_op(self.party_index,rindex)
-        
-        self.wire_dict[z] = out_val
+            if self.party_index == 1:
+                self._send_share(r,2,self.random_index)
+            elif self.party_index == 2:
+                self._send_share(r,3,self.random_index)
+            elif self.party_index == 3:
+                self._send_share(r,1,self.random_index)
 
-        self.random_index += 1
+            # must wait until we receive share from party
+            while self.interaction[self.random_index] == "wait":
+                pass
+
+            new_r = self.interaction[self.random_index]
+            z_val += Share(new_r - r, -2 * new_r - r)
+
+            self.random_index += 1
+
+        self.wire_dict[z] = z_val
 
     def _not(self, wire_in, wire_out):
         [x] = wire_in
         [z] = wire_out
-
-        (x_val,a_val) = self.wire_dict[x]
-
-        self.wire_dict[z] = (-x_val, -(a_val + 1*self.scale))
+        self.wire_dict[z] = self.wire_dict[x].not_op()
 
     def _comp(self, wire_in, wire_out):
         [x] = wire_in
@@ -695,7 +675,7 @@ class SecureEvaluator(Evaluator):
         rindex = self.random_index
         cur_random_val = self.randomness[rindex]
 
-        (x_val,a_val) = self.wire_dict[x]
+        #(x_val,a_val) = self.wire_dict[x]
         xa = self.wire_dict[x]
 
         #self.oracle.send_comp([xa],self.party_index,rindex)
@@ -726,48 +706,4 @@ class SecureEvaluator(Evaluator):
 
     def get_wire_dict(self):
         return self.wire_dict
-
-class S_Evaluator_0_1(SecureEvaluator):
-
-    def _mult(self, wire_in, wire_out):
-        [x,y] = wire_in
-        [z] = wire_out
-
-        rindex = self.random_index
-        cur_random_val = self.randomness[rindex]
-
-        (x_val,a_val) = self.wire_dict[x]
-        (y_val,b_val) = self.wire_dict[y]
-
-        print("rindex: " + str(rindex) + " pindex: " + str(self.party_index) + " old shares: " + str(self.wire_dict[x]) + " " + str(self.wire_dict[y]))
-
-        r = int(a_val / self.scale) * int(b_val / self.scale)
-        #print("rindex: " + str(rindex) + " pindex: " + str(self.party_index) + " r1: " + str(r))
-        r -= int(x_val / self.scale) * int(y_val / self.scale)
-        #print("rindex: " + str(rindex) + " pindex: " + str(self.party_index) + " r2: " + str(r))
-        r += int(cur_random_val)
-        #print("rindex: " + str(rindex) + " pindex: " + str(self.party_index) + " r3: " + str(r))
-        r = int(r / 3)
-        #print("rindex: " + str(rindex) + " pindex: " + str(self.party_index) + " r4: " + str(r))
-
-        print("rindex: " + str(rindex) + " pindex: " + str(self.party_index) + " r: " + str(r))
-
-        if self.party_index == 1:
-            self._send_share(r,2,self.random_index)
-        elif self.party_index == 2:
-            self._send_share(r,3,self.random_index)
-        elif self.party_index == 3:
-            self._send_share(r,1,self.random_index)
-
-        # must wait until we receive share from party
-        while self.interaction[self.random_index] == "wait":
-            pass
-
-        new_r = self.interaction[self.random_index]
-
-        #print(new_r)
-
-        self.wire_dict[z] = (int(new_r - r), int(-2 * new_r - r))
-        print("rindex: " + str(rindex) + " pindex: " + str(self.party_index) + " new share: " + str(self.wire_dict[z]))
-
-        self.random_index += 1
+       
