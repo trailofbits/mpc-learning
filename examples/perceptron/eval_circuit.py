@@ -114,6 +114,11 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     evaluator3 = SecureEvaluator(circuit.circuit,circuit.gate_order,3,oracle)
 
     parties = [evaluator1,evaluator2,evaluator3]
+    party_dict = {1: evaluator1, 2: evaluator2, 3: evaluator3}
+
+    evaluator1.add_parties(party_dict)
+    evaluator2.add_parties(party_dict)
+    evaluator3.add_parties(party_dict)
 
     # initialize dealer
     dealer = Dealer(parties,modulus,fp_precision=fp_precision)
@@ -180,7 +185,8 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
 
     # extract final outputs, scale them down
     (w,b) = get_w_b(results)
-    return (w / scale, b / scale)
+    #return (w / scale, b / scale)
+    return (w,b)
 
 def unshare(share1,share2):
     """
@@ -199,18 +205,15 @@ def unshare(share1,share2):
         value hidden by share1 and share2
     """
 
-    if type(share1) == tuple:
-        (x,a) = share1
-        (y,b) = share2
-        res = x - b
-        return res
-    else:
+    if type(share1) == list:
         res = []
         for i in range(len(share1)):
-            (x,a) = share1[i]
-            (y,b) = share2[i]
-            res.append(x - b)
-        return res
+            res.append(share1[i].unshare(share2[i]))
+
+    else:
+        res = share1.unshare(share2)
+
+    return res
 
 def get_w_b(w_b_shares):
     """
@@ -236,8 +239,8 @@ def get_w_b(w_b_shares):
     w3 = w_b_shares[3]['w']
     b3 = w_b_shares[3]['b']
 
-    w = np.array([w1[0][0]-w2[0][1],w1[1][0]-w2[1][1]])
-    b = b1[0] - b2[1]
+    w = [w1[0].unshare(w2[0]), w1[1].unshare(w2[1])]
+    b = b1.unshare(b2)
 
     return (w,b)
 
@@ -288,6 +291,7 @@ def run_eval(evaluator,iter_num,data_length,results_dict,party_index,fp_precisio
     results_dict[party_index] = {"w": w, "b": b}
 
 if __name__ == "__main__":
+    MOD = 10001112223334445556667778889991
 
     import data.iris_data as iris
 
@@ -297,4 +301,4 @@ if __name__ == "__main__":
 
     print(eval_circuit(data,num_iter))
 
-    print(secure_eval_circuit(data,num_iter,10**32,fp_precision=16))
+    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=16))
