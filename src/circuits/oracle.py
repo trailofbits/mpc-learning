@@ -105,6 +105,8 @@ class Oracle(Dealer):
             self._comp(rindex)
         elif op == "SMULT":
             self._smult(rindex)
+        elif op == "REVEAL":
+            self._reveal(rindex)
 
     def receive_op(self,pindex,rindex):
         if rindex not in self.outputs:
@@ -220,3 +222,32 @@ class Oracle(Dealer):
 
             [sh1,sh2,sh3] = self._make_shares(z)
             self.outputs[rindex] = {1: sh1, 2: sh2, 3: sh3}
+
+    def _reveal(self, rindex):
+        shrs = self.shares[rindex]
+        if (1 not in shrs) or (2 not in shrs) or (3 not in shrs):
+            self.outputs[rindex] = "wait"
+        else:
+            z = 0
+ 
+            #(x1,a1) = shrs[1][0]
+            #(x2,a2) = shrs[2][0]
+
+            #x_val = x1 - a2
+
+            [x_val1] = shrs[1]
+            [x_val2] = shrs[2]
+
+            if type(x_val1) == list:
+                z_vals = []
+                for i in range(len(x_val1)):
+                    z_vals.append(x_val1[i].unshare(x_val2[i]))
+
+                print("REVEALING z: " + str(z_vals))
+            
+            else:
+                z = x_val1.unshare(x_val2)
+                print("REVEALING z: " + str(z))
+            self.outputs[rindex] = "done"
+
+            

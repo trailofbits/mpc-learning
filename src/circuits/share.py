@@ -43,4 +43,10 @@ class Share():
         if res > (self.mod / 2):
             res = res - self.mod
         return res
+
+    def get_x(self):
+        return self.x
+
+    def get_a(self):
+        return self.a
     

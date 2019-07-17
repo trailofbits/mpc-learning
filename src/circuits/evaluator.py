@@ -1,5 +1,7 @@
 import numpy as np
 from src.circuits.share import Share
+from queue import Queue
+import time
 
 class Evaluator:
     """
@@ -518,11 +520,116 @@ class SecureEvaluator(Evaluator):
             Dictionary of wire values (key: wire name, value: wire value)
     """
 
-    def __init__(self,circuit,gate_order,party_index,oracle,fp_precision=16):
-        Evaluator.__init__(self,circuit,gate_order,fp_precision=fp_precision)
+    def __init__(self,circuit,input_gates,output_gates,party_index,oracle,fp_precision=16):
+        #Evaluator.__init__(self,circuit,[],fp_precision=fp_precision)
+        self.circuit = circuit
+        self.scale = 10**fp_precision
         self.party_index = party_index
         self.oracle = oracle
+        self.input_gates = {}
+        for ing in input_gates:
+            self.input_gates[ing.get_id()] = ing
+        self.output_gates = output_gates
         self.input_shares = []
+        self.q = Queue()
+        #for gate in circuit:
+        #    print("loading queue for gate: " + gate.get_id())
+        #    gate.set_queue(self.q)
+        self.outputs = {}
+        for outg in self.output_gates:
+            self.outputs[outg.get_id()] = ""
+
+    def run(self, verbose=False):
+        #if self.q.empty():
+        #    raise(Exception('Queue empty, no inputs added'))
+
+        i = 0
+        
+        gate = self.q.get()
+        while gate != "FIN":
+            self._eval_gate(gate)
+            #print("gate: " + str(i) + " " + str(gate.get_id()))
+            i += 1
+            gate = self.q.get()
+        
+    def reset_circuit(self):
+        self._clear_gates()
+
+    def _clear_gates(self):
+        # need to remove inputs from input gates
+        for in_id in self.input_gates:
+            self.input_gates[in_id].reset()
+        
+        # also reset all other gates
+        for gid in self.circuit:
+            for gate in self.circuit[gid]:
+                gate.reset()
+
+        self.outputs = {}
+        for outg in self.output_gates:
+            self.outputs[outg.get_id()] = ""
+
+    def _eval_gate(self,gate,verbose=False):
+            gate_type = gate.get_type()
+            #gate_input = gate.inputs
+            #gate_input = self.circuit[gate]["input"]
+            #gate_output = self.circuit[gate]["output"]
+            #gate_output = self.circuit[gate]
+
+            if gate_type == "ADD":
+                #self._add(gate_input,gate_output)
+                self._add(gate)
+            elif gate_type == "MULT":
+                #self._mult(gate_input,gate_output)
+                self._mult(gate)
+            elif gate_type == "SMULT":
+                #self._smult(gate_input,gate_output)
+                self._smult(gate)
+            elif gate_type == "DOT":
+                #self._dot(gate_input,gate_output)
+                self._dot(gate)
+            elif gate_type == "NOT":
+                #self._not(gate_input,gate_output)
+                self._not(gate)
+            elif gate_type == "COMP":
+                #self._comp(gate_input,gate_output)
+                self._comp(gate)
+            elif gate_type == "INPUT":
+                #if gate.get_id() == "in2":
+                #    self._reveal(gate)
+                self._input(gate)
+            elif gate_type == "OUTPUT":
+                self._output(gate)
+                if self._is_run_finished():
+                    self.q.put("FIN")
+            else:
+                raise(Exception('{} is not a valid gate type'.format(gate_type)))
+        
+
+    def initialize_state(self, inputs):
+        self.load_inputs(inputs)
+
+    def load_inputs(self, inputs):
+        #if 'in2' in inputs:
+        #    print("pid: " + str(self.party_index) + " input: " + str(inputs['in2'][0].get_x()) + ", " + str(inputs['in2'][0].get_a()))
+
+        for ing in inputs:
+            #print("loading gate: " + str(ing))
+            #if ing == "in2":
+                #print("before: " + str(self.input_gates[ing].inputs))
+                #print("inputs[ing]: " + str(self.input_shares[-2]))
+            self.input_gates[ing].add_input("",inputs[ing])
+            #if ing == "in2":
+                #print("after: " + str(self.input_gates[ing].inputs))
+            if self.input_gates[ing].is_ready():
+                self.q.put(self.input_gates[ing])
+    
+    def load_secure_inputs(self,inputs):
+        for ing_key in inputs:
+            #print("key: " + str(ing_key) + " val: " + str(self.input_shares[inputs[ing_key]]))
+            inputs[ing_key] = self.input_shares[inputs[ing_key]]
+
+        self.load_inputs(inputs)
 
     def add_parties(self,parties):
         self.parties = {}
@@ -546,38 +653,46 @@ class SecureEvaluator(Evaluator):
         for share in shares:
             self.input_shares.append(share)
 
-    def load_secure_inputs(self,inputs):
-        for wire_key in inputs:
-            inputs[wire_key] = self.input_shares[inputs[wire_key]]
+    def _add(self, gate):
+        gid = gate.get_id()
 
-        self.load_inputs(inputs)
+        [x,y] = gate.get_inputs()
 
-    def _add(self, wire_in, wire_out):
-        [x,y] = wire_in
-        [z] = wire_out
+        gate_output = self.circuit[gid]
 
-        if type(self.wire_dict[x]) == list:
+        if type(x) == list:
             z_vals = []
 
-            for i in range(len(self.wire_dict[x])):
-                z_vals.append(self.wire_dict[x][i] + self.wire_dict[y][i])
+            for i in range(len(x)):
+                z_vals.append(x[i] + y[i])
 
-            self.wire_dict[z] = z_vals
+            for gout in gate_output:
+                gout.add_input(gid, z_vals)
+                if gout.is_ready():
+                    self.q.put(gout)
+            #self.wire_dict[z] = z_vals
 
         else:
-            self.wire_dict[z] = self.wire_dict[x] + self.wire_dict[y]
+            #self.wire_dict[z] = self.wire_dict[x] + self.wire_dict[y]
+            for gout in gate_output:
+                gout.add_input(gid, x + y)
+                if gout.is_ready():
+                    self.q.put(gout)
 
-    def _mult(self, wire_in, wire_out):
-        [x,y] = wire_in
-        [z] = wire_out
+    def _mult(self, gate):
+        gid = gate.get_id()
+
+        [x,y] = gate.get_inputs()
+        gate_output = self.circuit[gid]
 
         rindex = self.random_index
         cur_random_val = self.randomness[rindex]
 
-        x_val = self.wire_dict[x]
-        y_val = self.wire_dict[y]
+        #x_val = self.wire_dict[x]
+        #y_val = self.wire_dict[y]
 
-        r = x_val.pre_mult(y_val, cur_random_val)
+        #r = x_val.pre_mult(y_val, cur_random_val)
+        r = x.pre_mult(y, cur_random_val)
 
         if self.party_index == 1:
             self._send_share(r,2,self.random_index)
@@ -591,15 +706,25 @@ class SecureEvaluator(Evaluator):
             pass
 
         new_r = self.interaction[self.random_index]
-        self.wire_dict[z] = Share(new_r - r, -2 * new_r - r)
+
+        for gout in gate_output:
+            #self.wire_dict[z] = Share(new_r - r, -2 * new_r - r)
+            gout.add_input(gid,Share(new_r - r, -2 * new_r - r))
+            if gout.is_ready():
+                self.q.put(gout)
         self.random_index += 1
 
-    def _smult(self, wire_in, wire_out):
-        [x,y] = wire_in
-        [z] = wire_out
+    def _smult(self, gate):
+        gid = gate.get_id()
 
-        x_val = self.wire_dict[x]
-        yvec = self.wire_dict[y]
+        #x,y] = wire_in
+        #[z] = wire_out
+
+        #x_val = self.wire_dict[x]
+        #yvec = self.wire_dict[y]
+
+        [x_val, yvec] = gate.get_inputs()
+        gate_output = self.circuit[gid]
 
         z_vals = []
 
@@ -626,14 +751,23 @@ class SecureEvaluator(Evaluator):
 
             self.random_index += 1
 
-        self.wire_dict[z] = z_vals
+        #self.wire_dict[z] = z_vals
+        for gout in gate_output:
+            gout.add_input(gid, z_vals)
+            if gout.is_ready():
+                self.q.put(gout)
 
-    def _dot(self, wire_in, wire_out):
-        [x,y] = wire_in
-        [z] = wire_out
+    def _dot(self, gate):
+        gid = gate.get_id()
 
-        xvec = self.wire_dict[x]
-        yvec = self.wire_dict[y]
+        #[x,y] = wire_in
+        #[z] = wire_out
+
+        #xvec = self.wire_dict[x]
+        #yvec = self.wire_dict[y]
+
+        [xvec, yvec] = gate.get_inputs()
+        gate_output = self.circuit[gid]
 
         z_val = Share(0,0)
 
@@ -661,22 +795,60 @@ class SecureEvaluator(Evaluator):
 
             self.random_index += 1
 
-        self.wire_dict[z] = z_val
+        #self.wire_dict[z] = z_val
+        for gout in gate_output:
+            gout.add_input(gid, z_val)
+            if gout.is_ready():
+                self.q.put(gout)
 
-    def _not(self, wire_in, wire_out):
-        [x] = wire_in
-        [z] = wire_out
-        self.wire_dict[z] = self.wire_dict[x].not_op()
+    def _not(self, gate):
+        gid = gate.get_id()
 
-    def _comp(self, wire_in, wire_out):
-        [x] = wire_in
-        [z] = wire_out
+        #[x] = wire_in
+        #[z] = wire_out
+
+        [x] = gate.get_inputs()
+        gate_output = self.circuit[gid]
+
+        #self.wire_dict[z] = self.wire_dict[x].not_op()
+        for gout in gate_output:
+            gout.add_input(gid,x.not_op())
+            if gout.is_ready():
+                self.q.put(gout)
+
+    def _reveal(self, gate):
+        gid = gate.get_id()
+
+        rindex = self.random_index
+        cur_random_val = self.randomness[rindex]
+
+        num_inputs = len(gate.get_inputs())
+
+        if num_inputs == 2:
+            [x,y] = gate.get_inputs()
+            self.oracle.send_op([x,y],self.party_index,rindex,"REVEAL")
+        else:
+            [x] = gate.get_inputs()
+            self.oracle.send_op([x],self.party_index,rindex,"REVEAL")
+
+        out_val = self.oracle.receive_op(self.party_index,rindex)
+        while out_val == "wait":
+            out_val = self.oracle.receive_op(self.party_index,rindex)
+
+    def _comp(self, gate):
+        gid = gate.get_id()
+
+        #[x] = wire_in
+        #[z] = wire_out
+
+        [xa] = gate.get_inputs()
+        gate_output = self.circuit[gid]
 
         rindex = self.random_index
         cur_random_val = self.randomness[rindex]
 
         #(x_val,a_val) = self.wire_dict[x]
-        xa = self.wire_dict[x]
+        #xa = self.wire_dict[x]
 
         #self.oracle.send_comp([xa],self.party_index,rindex)
         self.oracle.send_op([xa],self.party_index,rindex,"COMP")
@@ -687,9 +859,36 @@ class SecureEvaluator(Evaluator):
             #out_val = self.oracle.receive_comp(self.party_index,rindex)
             out_val = self.oracle.receive_op(self.party_index,rindex)
 
-        self.wire_dict[z] = out_val
+        #self.wire_dict[z] = out_val
+        for gout in gate_output:
+            gout.add_input(gid, out_val)
+            if gout.is_ready():
+                self.q.put(gout)
 
         self.random_index += 1
+
+    def _input(self, gate):
+        gid = gate.get_id()
+        [x] = gate.get_inputs()
+        #print("INPUT VAL x: " + str(x))
+        gate_output = self.circuit[gid]
+        for gout in gate_output:
+            gout.add_input(gid, x)
+            #print("IS " + str(gout.get_id()) + " RDY?: " + str(gout.inputs))
+            if gout.is_ready():
+                self.q.put(gout)
+
+    def _output(self, gate):
+        gid = gate.get_id()
+        [x] = gate.get_inputs()
+        self.outputs[gid] = x
+
+    def _is_run_finished(self):
+        finished = True
+        for out in self.outputs:
+            if self.outputs[out] == "":
+                finished = False
+        return finished
 
     def _send_share(self, value, party_index, random_index):
         receiver = self.parties[party_index]
@@ -701,7 +900,8 @@ class SecureEvaluator(Evaluator):
     def get_outputs(self):
         outs = []
         for out in self.outputs:
-            outs.append(self.wire_dict[out])
+            #outs.append(self.wire_dict[out])
+            outs.append(self.outputs[out])
         return outs
 
     def get_wire_dict(self):

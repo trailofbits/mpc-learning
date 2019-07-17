@@ -3,8 +3,10 @@ from src.circuits.evaluator import SecureEvaluator
 from src.circuits.dealer import Dealer
 from src.circuits.oracle import Oracle
 import circuit
+from examples.perceptron import circ
 import numpy as np
 from threading import Thread
+import copy
 
 def eval_circuit(data,num_iterations,initial_w=0,initial_b=0,fp_precision=16):
     """
@@ -71,6 +73,8 @@ def eval_circuit(data,num_iterations,initial_w=0,initial_b=0,fp_precision=16):
         evaluator.run()
 
         [w,b] = evaluator.get_outputs()
+        if i < 3:
+            print(str(w) + ", " + str(b))
 
     return (w / scale,b / scale)
 
@@ -108,10 +112,14 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     # initialize oracle
     oracle = Oracle(modulus,fp_precision=fp_precision)
 
+    circ1 = copy.deepcopy(circ.circuit)
+    circ2 = copy.deepcopy(circ.circuit)
+    circ3 = copy.deepcopy(circ.circuit)
+
     # initialize evaluators
-    evaluator1 = SecureEvaluator(circuit.circuit,circuit.gate_order,1,oracle)
-    evaluator2 = SecureEvaluator(circuit.circuit,circuit.gate_order,2,oracle)
-    evaluator3 = SecureEvaluator(circuit.circuit,circuit.gate_order,3,oracle)
+    evaluator1 = SecureEvaluator(circ1,circ.in_gates,circ.out_gates,1,oracle)
+    evaluator2 = SecureEvaluator(circ2,circ.in_gates,circ.out_gates,2,oracle)
+    evaluator3 = SecureEvaluator(circ3,circ.in_gates,circ.out_gates,3,oracle)
 
     parties = [evaluator1,evaluator2,evaluator3]
     party_dict = {1: evaluator1, 2: evaluator2, 3: evaluator3}
@@ -153,7 +161,7 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     dealer.distribute_shares(data3y)
 
     # use dealer to create random values for interactive operations
-    num_randomness = 12 * num_iterations
+    num_randomness = 100 * num_iterations
     dealer.generate_randomness(num_randomness)
 
     # need to make dimenions of w the same as x
@@ -169,11 +177,14 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
 
     # for each iteration of perceptron algorithm, have each SecureEvaluator
     # compute the circuit, each on their own thread, so they can interact
+    res = {}
     for i in range(num_iterations):
+
+        #print("iteration: " + str(i))
         
-        t1 = Thread(target=run_eval,args=(evaluator1,i,data_len,results,1,fp_precision))
-        t2 = Thread(target=run_eval,args=(evaluator2,i,data_len,results,2,fp_precision))
-        t3 = Thread(target=run_eval,args=(evaluator3,i,data_len,results,3,fp_precision))
+        t1 = Thread(target=run_eval,args=(evaluator1,i,data_len,results,1,fp_precision,res))
+        t2 = Thread(target=run_eval,args=(evaluator2,i,data_len,results,2,fp_precision,res))
+        t3 = Thread(target=run_eval,args=(evaluator3,i,data_len,results,3,fp_precision,res))
 
         t1.start()
         t2.start()
@@ -182,6 +193,10 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
         t1.join()
         t2.join()
         t3.join()
+
+    print("iter 0: " + str(unshare(res["0_1"][0],res["0_2"][0])) + ", " + str(unshare(res["0_1"][1],res["0_2"][1])))
+    print("iter 1: " + str(unshare(res["1_1"][0],res["1_2"][0])) + ", " + str(unshare(res["1_1"][1],res["1_2"][1])))
+    print("iter 2: " + str(unshare(res["2_1"][0],res["2_2"][0])) + ", " + str(unshare(res["2_1"][1],res["2_2"][1])))
 
     # extract final outputs, scale them down
     (w,b) = get_w_b(results)
@@ -245,7 +260,7 @@ def get_w_b(w_b_shares):
     return (w,b)
 
 
-def run_eval(evaluator,iter_num,data_length,results_dict,party_index,fp_precision=16):
+def run_eval(evaluator,iter_num,data_length,results_dict,party_index,fp_precision=16,wd={}):
     """
     Method to be run by each SecureEvaluator within their Thread (this will be
     called with secure_eval_circuit).
@@ -270,23 +285,32 @@ def run_eval(evaluator,iter_num,data_length,results_dict,party_index,fp_precisio
 
     # input will map wire name to index in list of shares
     cur_input = {}
-    cur_input["input0"] = iter_num
-    cur_input["input1"] = data_length + iter_num
+    cur_input["in0"] = iter_num
+    cur_input["in1"] = data_length + iter_num
 
     # only load initial b and w
-    if iter_num == 0:
-        cur_input["input2"] = -2
-        cur_input["input3"] = -1
+    #if iter_num == 0:
+    #    cur_input["in2"] = -2
+    #    cur_input["in3"] = -1
+
+    cur_input["in2"] = -2
+    cur_input["in3"] = -1
 
     evaluator.load_secure_inputs(cur_input)
     evaluator.run()
 
     [w,b] = evaluator.get_outputs()
+    evaluator.reset_circuit()
 
-    cur_in = {}
-    cur_in["input2"] = w
-    cur_in["input3"] = b
-    evaluator.load_inputs(cur_in)
+    if iter_num < 3:
+        wd[str(iter_num) + "_" + str(party_index)] = [w,b]
+
+    #cur_in = {}
+    #cur_in["in2"] = w
+    #cur_in["in3"] = b
+    #evaluator.load_inputs(cur_in)
+
+    evaluator.receive_shares([w,b])
 
     results_dict[party_index] = {"w": w, "b": b}
 
