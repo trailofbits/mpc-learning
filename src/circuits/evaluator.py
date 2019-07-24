@@ -594,6 +594,10 @@ class SecureEvaluator(Evaluator):
             elif gate_type == "COMP":
                 #self._comp(gate_input,gate_output)
                 self._comp(gate)
+            elif gate_type == "CMULT":
+                self._cmult(gate)
+            elif gate_type == "CADD":
+                self._cadd(gate)
             elif gate_type == "INPUT":
                 #if gate.get_id() == "in2":
                 #    self._reveal(gate)
@@ -866,6 +870,44 @@ class SecureEvaluator(Evaluator):
                 self.q.put(gout)
 
         self.random_index += 1
+
+    def _cmult(self, gate):
+        gid = gate.get_id()
+        [x] = gate.get_inputs()
+        [const] = gate.get_const_inputs()
+        gate_output = self.circuit[gid]
+
+        if type(x) == list:
+            out_val = []
+
+            for i in range(len(x)):
+                out_val.append(x[i].const_mult(const))
+        
+        else:
+            out_val = x.const_mult(const)
+
+        for gout in gate_output:
+            gout.add_input(gid, out_val)
+            if gout.is_ready():
+                self.q.put(gout)
+
+    def _cadd(self, gate):
+        gid = gate.get_id()
+        [x] = gate.get_inputs()
+        [const] = gate.get_const_inputs()
+        gate_output = self.circuit[gid]
+
+        if type(x) == list:
+            out_val = []
+            for i in range(len(x)):
+                out_val.append(x[i].const_add(const))
+        else:
+            out_val = x.const_add(const)
+
+        for gout in gate_output:
+            gout.add_input(gid, out_val)
+            if gout.is_ready():
+                self.q.put(gout)
 
     def _input(self, gate):
         gid = gate.get_id()

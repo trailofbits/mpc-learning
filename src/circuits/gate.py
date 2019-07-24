@@ -1,7 +1,7 @@
 from queue import Queue
 
 class Gate():
-    def __init__(self, id_num, gate_type, input_ids, gate_queue, ready=False):
+    def __init__(self, id_num, gate_type, input_ids, gate_queue=None, ready=False, const_input=None):
         self.id_num = id_num
         self.gate_type = gate_type
         self.input_ids = input_ids
@@ -15,6 +15,7 @@ class Gate():
         self.ready = ready
         self.complete = False
         self.output = ""
+        self.const_input = const_input
     
     def reset(self):
         for in_id in self.inputs:
@@ -38,7 +39,8 @@ class Gate():
     def get_inputs(self):
         input_vals = []
         for key in self.inputs:
-            input_vals.append(self.inputs[key])
+            if key != self.const_input:
+                input_vals.append(self.inputs[key])
         return input_vals
 
     def get_input_ids(self):
@@ -49,6 +51,13 @@ class Gate():
     
     def get_id(self):
         return self.id_num
+
+    def get_const_inputs(self):
+        input_vals = []
+        for key in self.inputs:
+            if key == self.const_input:
+                input_vals.append(self.inputs[key])
+        return input_vals
 
     def is_ready(self):
         ready = True

@@ -2,81 +2,12 @@ from src.circuits.evaluator import BasicEvaluator
 from src.circuits.evaluator import SecureEvaluator
 from src.circuits.dealer import Dealer
 from src.circuits.oracle import Oracle
-import circuit
-from examples.perceptron import circ
+from examples.svm import circuit as circ
 import numpy as np
 from threading import Thread
 import copy
+from examples.svm.alg import alter_data
 
-def eval_circuit(data,num_iterations,initial_w=0,initial_b=0,fp_precision=16):
-    """
-    Function that evaluates the perceptron circuit using a BasicEvaluator
-
-    Parameters
-    ----------
-    data: iterable
-        Data to be input into the perceptron algorithm (assumed iterable pairs)
-    num_iterations: int
-        Number of iterations that algorithm will run for
-    (optional) initial_w=0: int
-        Initial value of w, parameter of perceptron algorithm
-    (optional) initial_b=0: int
-        Initial value of b, parameter of perceptron algorithm
-    (optional) fp_precision=16: int
-        Fixed point number precision
-
-    Returns
-    -------
-    w: float
-        w value achieved after num_iterations of perceptron
-    b: int
-        b value achieved after num_iterations of perceptron
-    """
-
-    evaluator = BasicEvaluator(circuit.circuit,circuit.gate_order,fp_precision=fp_precision)
-
-    # perceptron circuit in circuit.py uses the following names for wires
-    # x = "input0"
-    # y = "input1"
-    # wi = "input2"
-    # bi = "input3"
-    #
-    # wo = "output0"
-    # bo = "output1"
-
-    # need to make dimenions of w the same as x
-    if initial_w == 0:
-        first_x = data[0][0]
-        initial_w = np.zeros(len(first_x))
-
-    w = initial_w
-    b = initial_b
-
-    # used fixed point arithmetic, accurate up to fp_precision decimal places
-    # need to scale x,y up by 10^fp_precision
-    # after every mult, numbers will be scaled back down by 10^fp_precision
-    scale = 10**fp_precision
-
-    for i in range(num_iterations):
-
-        (x,y) = data[i]
-        # scale up data to account for fixed point arithmetic
-        x = x*scale
-        y = y*scale
-        cur_input = {}
-        cur_input["input0"] = x
-        cur_input["input1"] = y
-        cur_input["input2"] = w
-        cur_input["input3"] = b
-
-        evaluator.load_inputs(cur_input)
-        evaluator.run()
-
-        [w,b] = evaluator.get_outputs()
-        if i < 3:
-            print(str(w) + ", " + str(b))
-
-    return (w / scale,b / scale)
 
 def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_precision=16):
     """
@@ -105,6 +36,9 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     b: int
         b value achieved after num_iterations of perceptron
     """
+
+    # alter data to work for svm
+    data = alter_data(data)
 
     # account for fixed point precision
     scale = 10**fp_precision
@@ -171,7 +105,7 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     initial_w = [initial_w,[]]
 
     dealer.distribute_shares(initial_w)
-    dealer.distribute_shares(initial_b)
+    #dealer.distribute_shares(initial_b)
 
     results = {}
 
@@ -182,9 +116,9 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
 
         #print("iteration: " + str(i))
         
-        t1 = Thread(target=run_eval,args=(evaluator1,i,data_len,results,1,fp_precision,res))
-        t2 = Thread(target=run_eval,args=(evaluator2,i,data_len,results,2,fp_precision,res))
-        t3 = Thread(target=run_eval,args=(evaluator3,i,data_len,results,3,fp_precision,res))
+        t1 = Thread(target=run_eval,args=(evaluator1,i,data_len,results,1,modulus,fp_precision,res))
+        t2 = Thread(target=run_eval,args=(evaluator2,i,data_len,results,2,modulus,fp_precision,res))
+        t3 = Thread(target=run_eval,args=(evaluator3,i,data_len,results,3,modulus,fp_precision,res))
 
         t1.start()
         t2.start()
@@ -194,9 +128,8 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
         t2.join()
         t3.join()
 
-    print("iter 0: " + str(unshare(res["0_1"][0],res["0_2"][0])) + ", " + str(unshare(res["0_1"][1],res["0_2"][1])))
-    print("iter 1: " + str(unshare(res["1_1"][0],res["1_2"][0])) + ", " + str(unshare(res["1_1"][1],res["1_2"][1])))
-    print("iter 2: " + str(unshare(res["2_1"][0],res["2_2"][0])) + ", " + str(unshare(res["2_1"][1],res["2_2"][1])))
+    for a in range(150):
+        print("iter " + str(a) + ": " + str(unshare(res[str(a)+"_1"][0],res[str(a)+"_2"][0])))
 
     # extract final outputs, scale them down
     (w,b) = get_w_b(results)
@@ -248,19 +181,16 @@ def get_w_b(w_b_shares):
     """
 
     w1 = w_b_shares[1]['w']
-    b1 = w_b_shares[1]['b']
     w2 = w_b_shares[2]['w']
-    b2 = w_b_shares[2]['b']
     w3 = w_b_shares[3]['w']
-    b3 = w_b_shares[3]['b']
 
     w = [w1[0].unshare(w2[0]), w1[1].unshare(w2[1])]
-    b = b1.unshare(b2)
+    b = w1[2].unshare(w2[2])
 
     return (w,b)
 
 
-def run_eval(evaluator,iter_num,data_length,results_dict,party_index,fp_precision=16,wd={}):
+def run_eval(evaluator,iter_num,data_length,results_dict,party_index,mod,fp_precision=16,wd={}):
     """
     Method to be run by each SecureEvaluator within their Thread (this will be
     called with secure_eval_circuit).
@@ -293,29 +223,63 @@ def run_eval(evaluator,iter_num,data_length,results_dict,party_index,fp_precisio
     #    cur_input["in2"] = -2
     #    cur_input["in3"] = -1
 
-    cur_input["in2"] = -2
-    cur_input["in3"] = -1
+    cur_input["in2"] = -1
 
     evaluator.load_secure_inputs(cur_input)
+
+    # need to load in constant values
+    # -1: for computing <=1, subtract 1 and comp <= 0
+    # gam1: need to have 1 - gamma for computing w
+    # gamC: need gamma * C also for computing w
+    neg1 = int(-1*scale)
+    #gamma = mod_inverse(int((1.0 + iter_num)*scale),mod)
+    #gamma = int((1.0 / (1.0 + iter_num)) * scale)
+    #gamma = int(0.5*scale)
+    gamma = mod_inverse(int(1 + iter_num),mod) * scale
+    gam1 = int(1*scale - gamma)
+    gamC = int(gamma * 1)
+
+    load_in_constants = {}
+    load_in_constants["in3"] = gam1
+    load_in_constants["in4"] = gamC
+    load_in_constants["in5"] = neg1
+
+    evaluator.load_inputs(load_in_constants)
+
     evaluator.run()
 
-    [w,b] = evaluator.get_outputs()
+    [w] = evaluator.get_outputs()
     evaluator.reset_circuit()
 
-    if iter_num < 3:
-        wd[str(iter_num) + "_" + str(party_index)] = [w,b]
+    wd[str(iter_num) + "_" + str(party_index)] = [w]
 
     #cur_in = {}
     #cur_in["in2"] = w
     #cur_in["in3"] = b
     #evaluator.load_inputs(cur_in)
 
-    evaluator.receive_shares([w,b])
+    evaluator.receive_shares([w])
 
-    results_dict[party_index] = {"w": w, "b": b}
+    results_dict[party_index] = {"w": w}
+
+def mod_inverse(val, mod):
+    g, x, y = egcd(val, mod)
+    if g != 1:
+        raise Exception('modular inverse does not exist')
+    else:
+        return x % mod
+
+def egcd(a,b):
+    if a == 0:
+        return (b,0,1)
+    else:
+        g, y, x = egcd(b %a, a)
+        return (g, x - (b //a) * y, y)
+
 
 if __name__ == "__main__":
     MOD = 10001112223334445556667778889991
+    #MOD = 622288097498926496141095869268883999563096063592498055290461
 
     import data.iris_data as iris
 
@@ -323,6 +287,4 @@ if __name__ == "__main__":
 
     num_iter = len(data)
 
-    print(eval_circuit(data,num_iter))
-
-    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=24))
+    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=16))
