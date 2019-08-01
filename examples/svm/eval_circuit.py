@@ -82,8 +82,8 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
         data1y.append(data[i][1])
         data2x.append(data[split + i][0])
         data2y.append(data[split + i][1])
-        data3x.append(data[2*split + 1][0])
-        data3y.append(data[2*split + 1][1])
+        data3x.append(data[2*split + i][0])
+        data3y.append(data[2*split + i][1])
 
     # use dealer to create shares of all inputs
     dealer.distribute_shares(data1x)
@@ -95,7 +95,7 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     dealer.distribute_shares(data3y)
 
     # use dealer to create random values for interactive operations
-    num_randomness = 100 * num_iterations
+    num_randomness = 1000 * num_iterations
     dealer.generate_randomness(num_randomness)
 
     # need to make dimenions of w the same as x
@@ -134,7 +134,11 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     # extract final outputs, scale them down
     (w,b) = get_w_b(results)
     #return (w / scale, b / scale)
-    return (w,b)
+    wout = []
+    for el in w:
+        wout.append(el / scale)
+    bout = b / scale
+    return (wout,bout)
 
 def unshare(share1,share2):
     """
@@ -233,9 +237,17 @@ def run_eval(evaluator,iter_num,data_length,results_dict,party_index,mod,fp_prec
     # gamC: need gamma * C also for computing w
     neg1 = int(-1*scale)
     #gamma = mod_inverse(int((1.0 + iter_num)*scale),mod)
-    #gamma = int((1.0 / (1.0 + iter_num)) * scale)
+    pre_gamma = 1.0 / (1.0 + iter_num)
+    gamma = round(pre_gamma * 10**7)
+    #gamma = int(gamma / 10**7)
+    gamma = int(gamma * scale)
+    gamma = int(gamma / 10**7)
+    #gamma = int(round((1.0 / (1.0 + iter_num))*10**7) / 10**7 * scale)
+    print(gamma)
     #gamma = int(0.5*scale)
-    gamma = mod_inverse(int(1 + iter_num),mod) * scale
+    #gamma = int(mod_inverse(2,mod) * scale)
+    #gamma = mod_inverse(int(1 + iter_num),mod) * scale
+    #gamma = int(1*scale)
     gam1 = int(1*scale - gamma)
     gamC = int(gamma * 1)
 
@@ -278,8 +290,9 @@ def egcd(a,b):
 
 
 if __name__ == "__main__":
-    MOD = 10001112223334445556667778889991
-    #MOD = 622288097498926496141095869268883999563096063592498055290461
+    #MOD = 10001112223334445556667778889991
+    MOD = 622288097498926496141095869268883999563096063592498055290461
+    #MOD = 24684249032065892333066123534168930441269525239006410135714283699648991959894332868446109170827166448301044689
 
     import data.iris_data as iris
 
@@ -287,4 +300,4 @@ if __name__ == "__main__":
 
     num_iter = len(data)
 
-    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=16))
+    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=12))

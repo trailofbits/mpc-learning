@@ -22,8 +22,10 @@ def svm(data, num_iterations, initial_w=0, initial_b=0, hyper_param=1, fp_precis
 
     for i in range(num_iterations):
 
-        #learning_rate = int((1.0 / (1 + i)) * scale)
-        learning_rate = int(0.5 * scale)
+        learning_rate = int(round((1.0 / (1.0 + i))*10**7) / 10**7 * scale)
+        #learning_rate = int(0.5 * scale)
+        #learning_rate = int(1*scale)
+        #learning_rate = int(scale / 3)
 
         np_x = np.array(svm_data[i][0])
         y = svm_data[i][1]
@@ -45,12 +47,19 @@ def svm(data, num_iterations, initial_w=0, initial_b=0, hyper_param=1, fp_precis
             #print(w)
         else:
             w = (1*scale - learning_rate) / scale * w
-        for a in range(len(w)):
-            w[a] = int(w[a])
+        w = np.array([int(round(el / 10**7)*10**7) for el in w])
+        #for a in range(len(w)):
+        #    w[a] = int(w[a])
+        #    print(w[a])
+        #    print(int(w[a]))
 
         if (i < 150):
             print("iter " + str(i) + ": " + str(w))
         #print(w)
+
+        #if 98 <  i < 102:
+        #    print("ITERATION: " + str(i))
+        #    print("data: " + str((np_x,y)))
 
     return_w = w[:-1]
     return_b = w[-1]
@@ -105,5 +114,5 @@ if __name__ == "__main__":
     data = iris.get_iris_data()
 
     num_iter = len(data)
-    print(svm(data,num_iter,fp_precision=16))
+    print(svm(data,num_iter,fp_precision=12))
     #plot_data_line(data,"")

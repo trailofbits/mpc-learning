@@ -547,7 +547,7 @@ class SecureEvaluator(Evaluator):
         
         gate = self.q.get()
         while gate != "FIN":
-            self._eval_gate(gate)
+            self._eval_gate(gate, verbose=verbose)
             #print("gate: " + str(i) + " " + str(gate.get_id()))
             i += 1
             gate = self.q.get()
@@ -576,6 +576,28 @@ class SecureEvaluator(Evaluator):
             #gate_output = self.circuit[gate]["output"]
             #gate_output = self.circuit[gate]
 
+            if verbose:
+                print("gate type: " + str(gate_type))
+                print("gate id: " + str(gate.get_id()))
+                print("party index: " + str(self.party_index))
+                ins = gate.get_inputs()
+                ext = []
+                for element in ins:
+                    if type(element) == int:
+                        ext.append(element)
+                    elif type(element) == list:
+                        el_list = []
+                        for el in element:
+                            x_val = el.get_x()
+                            a_val = el.get_a()
+                            el_list.append((x_val,a_val))
+                        ext.append(el_list)
+                    else:
+                        x_val = element.get_x()
+                        a_val = element.get_a()
+                        ext.append((x_val,a_val))
+                print("gate inputs: " + str(ext))
+
             if gate_type == "ADD":
                 #self._add(gate_input,gate_output)
                 self._add(gate)
@@ -594,6 +616,8 @@ class SecureEvaluator(Evaluator):
             elif gate_type == "COMP":
                 #self._comp(gate_input,gate_output)
                 self._comp(gate)
+            elif gate_type == "ROUND":
+                self._round(gate)
             elif gate_type == "CMULT":
                 self._cmult(gate)
             elif gate_type == "CADD":
@@ -856,6 +880,38 @@ class SecureEvaluator(Evaluator):
 
         #self.oracle.send_comp([xa],self.party_index,rindex)
         self.oracle.send_op([xa],self.party_index,rindex,"COMP")
+
+        #out_val = self.oracle.receive_comp(self.party_index,rindex)
+        out_val = self.oracle.receive_op(self.party_index,rindex)
+        while out_val == "wait":
+            #out_val = self.oracle.receive_comp(self.party_index,rindex)
+            out_val = self.oracle.receive_op(self.party_index,rindex)
+
+        #self.wire_dict[z] = out_val
+        for gout in gate_output:
+            gout.add_input(gid, out_val)
+            if gout.is_ready():
+                self.q.put(gout)
+
+        self.random_index += 1
+
+    def _round(self, gate):
+        gid = gate.get_id()
+
+        #[x] = wire_in
+        #[z] = wire_out
+
+        [xa] = gate.get_inputs()
+        gate_output = self.circuit[gid]
+
+        rindex = self.random_index
+        cur_random_val = self.randomness[rindex]
+
+        #(x_val,a_val) = self.wire_dict[x]
+        #xa = self.wire_dict[x]
+
+        #self.oracle.send_comp([xa],self.party_index,rindex)
+        self.oracle.send_op([xa],self.party_index,rindex,"ROUND")
 
         #out_val = self.oracle.receive_comp(self.party_index,rindex)
         out_val = self.oracle.receive_op(self.party_index,rindex)

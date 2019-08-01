@@ -325,4 +325,4 @@ if __name__ == "__main__":
 
     print(eval_circuit(data,num_iter))
 
-    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=24))
+    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=16))

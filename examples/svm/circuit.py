@@ -97,8 +97,11 @@ g10 = Gate("g10","SMULT",[g9.get_id(),g6.get_id()])
 # gate for adding two multiplexes
 g11 = Gate("g11","ADD",[g8.get_id(),g10.get_id()])
 
+# gate for rounding results
+g12 = Gate("g12","ROUND",[g11.get_id()])
+
 # gate for outputing w'
-wo = Gate("out0","OUTPUT",[g11.get_id()])
+wo = Gate("out0","OUTPUT",[g12.get_id()])
 
 circuit = {}
 
@@ -119,7 +122,8 @@ circuit[g7.get_id()] = [g8]
 circuit[g8.get_id()] = [g11]
 circuit[g9.get_id()] = [g10]
 circuit[g10.get_id()] = [g11]
-circuit[g11.get_id()] = [wo]
+circuit[g11.get_id()] = [g12]
+circuit[g12.get_id()] = [wo]
 
 in_gates = [x,y,wi,gamma1,gammaC,minus1]
 out_gates = [wo]

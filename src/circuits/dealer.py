@@ -154,9 +154,9 @@ class Dealer():
             share1 = []
             share2 = []
             share3 = []
-
+            
             for val in input_value:
-                val = int(val*self.scale) % self.mod
+                mod_val = int(round(val*self.scale)) % self.mod
                 
                 # first generate three random values a, b, c s.t. a + b + c = 0
                 #a = int(randint(0,self.mod-1))
@@ -172,10 +172,10 @@ class Dealer():
                     share2.append(b)
                     share3.append(c)
                 else:
-                    share1.append(Share(a,c-val,mod=self.mod))
-                    share2.append(Share(b,a-val,mod=self.mod))
-                    share3.append(Share(c,b-val,mod=self.mod))
-
+                    share1.append(Share(a,c-mod_val,mod=self.mod))
+                    share2.append(Share(b,a-mod_val,mod=self.mod))
+                    share3.append(Share(c,b-mod_val,mod=self.mod))
+            
         return (share1,share2,share3)
 
     def _send_shares(self,shares,receiver):
