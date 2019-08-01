@@ -210,10 +210,8 @@ class Oracle(Dealer):
                 for i in range(len(x_val1)):
                     cur = x_val1[i].unshare(x_val2[i])
                     z.append((round(cur / 10**7) * 10**7) / self.scale)
-                print(z)
             else:
                 x_val = x_val1.unshare(x_val2)
-                print(x_val)
                 z = (round(x_val / 10**7) * 10**7) / self.scale
 
             [sh1,sh2,sh3] = self._make_shares(z)

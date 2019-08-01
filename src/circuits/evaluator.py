@@ -2,6 +2,8 @@ import numpy as np
 from src.circuits.share import Share
 from queue import Queue
 import time
+import asyncio
+from threading import Event
 
 class Evaluator:
     """
@@ -501,7 +503,6 @@ class SecureEvaluator(Evaluator):
             Value to be received from other party
         random_index:
             Index representing which random interactive value to use
-
     
     get_outputs(self)
         Getter for outputs of circuit
@@ -538,6 +539,9 @@ class SecureEvaluator(Evaluator):
         self.outputs = {}
         for outg in self.output_gates:
             self.outputs[outg.get_id()] = ""
+
+        self.mult_listener = None
+        self.oracle_listener = None
 
     def run(self, verbose=False):
         #if self.q.empty():
@@ -633,7 +637,6 @@ class SecureEvaluator(Evaluator):
             else:
                 raise(Exception('{} is not a valid gate type'.format(gate_type)))
         
-
     def initialize_state(self, inputs):
         self.load_inputs(inputs)
 
@@ -707,6 +710,39 @@ class SecureEvaluator(Evaluator):
                 if gout.is_ready():
                     self.q.put(gout)
 
+    def _interact_oracle(self):
+        pass
+
+    def _interact_mult(self, r_val):
+        # if self.interaction[rand_index] doesnt equal "wait"
+        # this means that another party already send us a mult value
+        # so we do not need an async event listener, so it will
+        # be set to None
+        if self.interaction[self.random_index] == "wait":
+            self.mult_listener = Event()
+        else:
+            self.mult_listener = None
+
+        # each party sends value to other party
+        if self.party_index == 1:
+            self._send_share(r_val,2,self.random_index)
+        elif self.party_index == 2:
+            self._send_share(r_val,3,self.random_index)
+        elif self.party_index == 3:
+            self._send_share(r_val,1,self.random_index)
+
+        # if we don't have event listener, we don't have to wait
+        # because we already received share from party
+        if self.mult_listener != None:
+            self.mult_listener.wait()
+            new_r = self.interaction[self.random_index]
+        else:
+        # pull new value from self.interaction list
+            new_r = self.interaction[self.random_index]
+        self.random_index += 1
+        self.mult_listener = None
+        return new_r
+
     def _mult(self, gate):
         gid = gate.get_id()
 
@@ -722,25 +758,15 @@ class SecureEvaluator(Evaluator):
         #r = x_val.pre_mult(y_val, cur_random_val)
         r = x.pre_mult(y, cur_random_val)
 
-        if self.party_index == 1:
-            self._send_share(r,2,self.random_index)
-        elif self.party_index == 2:
-            self._send_share(r,3,self.random_index)
-        elif self.party_index == 3:
-            self._send_share(r,1,self.random_index)
-
-        # must wait until we receive share from party
-        while self.interaction[self.random_index] == "wait":
-            pass
-
-        new_r = self.interaction[self.random_index]
+        new_r = self._interact_mult(r)
 
         for gout in gate_output:
-            #self.wire_dict[z] = Share(new_r - r, -2 * new_r - r)
             gout.add_input(gid,Share(new_r - r, -2 * new_r - r))
             if gout.is_ready():
                 self.q.put(gout)
+
         self.random_index += 1
+        self.mult_listener = None
 
     def _smult(self, gate):
         gid = gate.get_id()
@@ -763,21 +789,12 @@ class SecureEvaluator(Evaluator):
 
             r = x_val.pre_mult(y_val, cur_random_val)
 
-            if self.party_index == 1:
-                self._send_share(r,2,self.random_index)
-            elif self.party_index == 2:
-                self._send_share(r,3,self.random_index)
-            elif self.party_index == 3:
-                self._send_share(r,1,self.random_index)
+            new_r = self._interact_mult(r)
 
-            # must wait until we receive share from party
-            while self.interaction[self.random_index] == "wait":
-                pass
-
-            new_r = self.interaction[self.random_index]
             z_vals.append(Share(new_r - r, -2 * new_r - r))
 
-            self.random_index += 1
+            #self.random_index += 1
+            #self.mult_listener = None
 
         #self.wire_dict[z] = z_vals
         for gout in gate_output:
@@ -806,7 +823,8 @@ class SecureEvaluator(Evaluator):
             y_val = yvec[i]
 
             r = x_val.pre_mult(y_val, cur_random_val)
-
+            new_r = self._interact_mult(r)
+            """
             if self.party_index == 1:
                 self._send_share(r,2,self.random_index)
             elif self.party_index == 2:
@@ -819,6 +837,7 @@ class SecureEvaluator(Evaluator):
                 pass
 
             new_r = self.interaction[self.random_index]
+            """
             z_val += Share(new_r - r, -2 * new_r - r)
 
             self.random_index += 1
@@ -993,6 +1012,8 @@ class SecureEvaluator(Evaluator):
         receiver._receive_party_share(value,random_index)
 
     def _receive_party_share(self, share, random_index):
+        if self.mult_listener != None:
+            self.mult_listener.set()
         self.interaction[random_index] = share
 
     def get_outputs(self):

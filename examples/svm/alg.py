@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 def svm(data, num_iterations, initial_w=0, initial_b=0, hyper_param=1, fp_precision=16):
 
@@ -19,6 +20,8 @@ def svm(data, num_iterations, initial_w=0, initial_b=0, hyper_param=1, fp_precis
     # also scale down by 10^fp_precision after every mult
     scale = 10**fp_precision
     #scale = 1.0
+
+    start_time = time.time()
 
     for i in range(num_iterations):
 
@@ -53,8 +56,8 @@ def svm(data, num_iterations, initial_w=0, initial_b=0, hyper_param=1, fp_precis
         #    print(w[a])
         #    print(int(w[a]))
 
-        if (i < 150):
-            print("iter " + str(i) + ": " + str(w))
+        #if (i < 150):
+        #    print("iter " + str(i) + ": " + str(w))
         #print(w)
 
         #if 98 <  i < 102:
@@ -65,6 +68,8 @@ def svm(data, num_iterations, initial_w=0, initial_b=0, hyper_param=1, fp_precis
     return_b = w[-1]
     #print(w)
     #print(return_w)
+    elapsed_time = time.time() - start_time
+    print("elapsed time: " + str(elapsed_time))
         
     return (return_w / scale,return_b / scale)
     #return w / scale

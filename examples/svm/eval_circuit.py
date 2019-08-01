@@ -7,6 +7,9 @@ import numpy as np
 from threading import Thread
 import copy
 from examples.svm.alg import alter_data
+import asyncio
+import time
+
 
 
 def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_precision=16):
@@ -64,6 +67,8 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
 
     # initialize dealer
     dealer = Dealer(parties,modulus,fp_precision=fp_precision)
+
+    start_time = time.time()
 
     # split x_data and y_data into 3 lists, one for each party
     # this simulates each party having private input data
@@ -128,8 +133,8 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
         t2.join()
         t3.join()
 
-    for a in range(150):
-        print("iter " + str(a) + ": " + str(unshare(res[str(a)+"_1"][0],res[str(a)+"_2"][0])))
+    #for a in range(150):
+    #    print("iter " + str(a) + ": " + str(unshare(res[str(a)+"_1"][0],res[str(a)+"_2"][0])))
 
     # extract final outputs, scale them down
     (w,b) = get_w_b(results)
@@ -138,7 +143,9 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     for el in w:
         wout.append(el / scale)
     bout = b / scale
-    return (wout,bout)
+    elapsed_time = time.time() - start_time
+    print("elapsed time: " + str(elapsed_time))
+    return (np.array(wout),bout)
 
 def unshare(share1,share2):
     """
@@ -236,18 +243,10 @@ def run_eval(evaluator,iter_num,data_length,results_dict,party_index,mod,fp_prec
     # gam1: need to have 1 - gamma for computing w
     # gamC: need gamma * C also for computing w
     neg1 = int(-1*scale)
-    #gamma = mod_inverse(int((1.0 + iter_num)*scale),mod)
     pre_gamma = 1.0 / (1.0 + iter_num)
     gamma = round(pre_gamma * 10**7)
-    #gamma = int(gamma / 10**7)
     gamma = int(gamma * scale)
     gamma = int(gamma / 10**7)
-    #gamma = int(round((1.0 / (1.0 + iter_num))*10**7) / 10**7 * scale)
-    print(gamma)
-    #gamma = int(0.5*scale)
-    #gamma = int(mod_inverse(2,mod) * scale)
-    #gamma = mod_inverse(int(1 + iter_num),mod) * scale
-    #gamma = int(1*scale)
     gam1 = int(1*scale - gamma)
     gamC = int(gamma * 1)
 

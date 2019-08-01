@@ -7,6 +7,7 @@ from examples.perceptron import circ
 import numpy as np
 from threading import Thread
 import copy
+import time
 
 def eval_circuit(data,num_iterations,initial_w=0,initial_b=0,fp_precision=16):
     """
@@ -44,6 +45,8 @@ def eval_circuit(data,num_iterations,initial_w=0,initial_b=0,fp_precision=16):
     # wo = "output0"
     # bo = "output1"
 
+    start_time = time.time()
+
     # need to make dimenions of w the same as x
     if initial_w == 0:
         first_x = data[0][0]
@@ -73,9 +76,11 @@ def eval_circuit(data,num_iterations,initial_w=0,initial_b=0,fp_precision=16):
         evaluator.run()
 
         [w,b] = evaluator.get_outputs()
-        if i < 3:
-            print(str(w) + ", " + str(b))
+        #if i < 3:
+        #    print(str(w) + ", " + str(b))
 
+    elapsed_time = time.time() - start_time
+    print("elapsed_time: " + str(elapsed_time))
     return (w / scale,b / scale)
 
 def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_precision=16):
@@ -130,6 +135,8 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
 
     # initialize dealer
     dealer = Dealer(parties,modulus,fp_precision=fp_precision)
+
+    start_time = time.time()
 
     # split x_data and y_data into 3 lists, one for each party
     # this simulates each party having private input data
@@ -194,13 +201,15 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
         t2.join()
         t3.join()
 
-    print("iter 0: " + str(unshare(res["0_1"][0],res["0_2"][0])) + ", " + str(unshare(res["0_1"][1],res["0_2"][1])))
-    print("iter 1: " + str(unshare(res["1_1"][0],res["1_2"][0])) + ", " + str(unshare(res["1_1"][1],res["1_2"][1])))
-    print("iter 2: " + str(unshare(res["2_1"][0],res["2_2"][0])) + ", " + str(unshare(res["2_1"][1],res["2_2"][1])))
+    #print("iter 0: " + str(unshare(res["0_1"][0],res["0_2"][0])) + ", " + str(unshare(res["0_1"][1],res["0_2"][1])))
+    #print("iter 1: " + str(unshare(res["1_1"][0],res["1_2"][0])) + ", " + str(unshare(res["1_1"][1],res["1_2"][1])))
+    #print("iter 2: " + str(unshare(res["2_1"][0],res["2_2"][0])) + ", " + str(unshare(res["2_1"][1],res["2_2"][1])))
 
     # extract final outputs, scale them down
     (w,b) = get_w_b(results)
     #return (w / scale, b / scale)
+    elapsed_time = time.time() - start_time
+    print("elapsed time: " + str(elapsed_time))
     return (w,b)
 
 def unshare(share1,share2):
@@ -325,4 +334,4 @@ if __name__ == "__main__":
 
     print(eval_circuit(data,num_iter))
 
-    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=16))
+    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=12))
