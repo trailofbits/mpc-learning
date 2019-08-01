@@ -54,9 +54,9 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     circ3 = copy.deepcopy(circ.circuit)
 
     # initialize evaluators
-    evaluator1 = SecureEvaluator(circ1,circ.in_gates,circ.out_gates,1,oracle)
-    evaluator2 = SecureEvaluator(circ2,circ.in_gates,circ.out_gates,2,oracle)
-    evaluator3 = SecureEvaluator(circ3,circ.in_gates,circ.out_gates,3,oracle)
+    evaluator1 = SecureEvaluator(circ1,circ.in_gates,circ.out_gates,1,oracle,modulus)
+    evaluator2 = SecureEvaluator(circ2,circ.in_gates,circ.out_gates,2,oracle,modulus)
+    evaluator3 = SecureEvaluator(circ3,circ.in_gates,circ.out_gates,3,oracle,modulus)
 
     parties = [evaluator1,evaluator2,evaluator3]
     party_dict = {1: evaluator1, 2: evaluator2, 3: evaluator3}
@@ -289,9 +289,13 @@ def egcd(a,b):
 
 
 if __name__ == "__main__":
+
     #MOD = 10001112223334445556667778889991
-    MOD = 622288097498926496141095869268883999563096063592498055290461
-    #MOD = 24684249032065892333066123534168930441269525239006410135714283699648991959894332868446109170827166448301044689
+
+    # 199 bits
+    #MOD = 622288097498926496141095869268883999563096063592498055290461
+
+    MOD = 24684249032065892333066123534168930441269525239006410135714283699648991959894332868446109170827166448301044689
 
     import data.iris_data as iris
 
@@ -299,4 +303,4 @@ if __name__ == "__main__":
 
     num_iter = len(data)
 
-    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=12))
+    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=9))

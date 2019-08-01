@@ -122,9 +122,9 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     circ3 = copy.deepcopy(circ.circuit)
 
     # initialize evaluators
-    evaluator1 = SecureEvaluator(circ1,circ.in_gates,circ.out_gates,1,oracle)
-    evaluator2 = SecureEvaluator(circ2,circ.in_gates,circ.out_gates,2,oracle)
-    evaluator3 = SecureEvaluator(circ3,circ.in_gates,circ.out_gates,3,oracle)
+    evaluator1 = SecureEvaluator(circ1,circ.in_gates,circ.out_gates,1,oracle,modulus)
+    evaluator2 = SecureEvaluator(circ2,circ.in_gates,circ.out_gates,2,oracle,modulus)
+    evaluator3 = SecureEvaluator(circ3,circ.in_gates,circ.out_gates,3,oracle,modulus)
 
     parties = [evaluator1,evaluator2,evaluator3]
     party_dict = {1: evaluator1, 2: evaluator2, 3: evaluator3}

@@ -82,6 +82,7 @@ class Dealer():
         self.parties = parties
         self.mod = modulus
         self.scale = 10**fp_precision
+        self.fpp = fp_precision
         #self.modulus = modulus / self.scale
 
     def generate_randomness(self,number_of_values):
@@ -146,9 +147,9 @@ class Dealer():
                 #share1 = (a,c-val)
                 #share2 = (b,a-val)
                 #share3 = (c,b-val)
-                share1 = Share(a,c-val,mod=self.mod)
-                share2 = Share(b,a-val,mod=self.mod)
-                share3 = Share(c,b-val,mod=self.mod)
+                share1 = Share(a,c-val,mod=self.mod,fp_prec=self.fpp)
+                share2 = Share(b,a-val,mod=self.mod,fp_prec=self.fpp)
+                share3 = Share(c,b-val,mod=self.mod,fp_prec=self.fpp)
 
         else:
             share1 = []
@@ -172,9 +173,9 @@ class Dealer():
                     share2.append(b)
                     share3.append(c)
                 else:
-                    share1.append(Share(a,c-mod_val,mod=self.mod))
-                    share2.append(Share(b,a-mod_val,mod=self.mod))
-                    share3.append(Share(c,b-mod_val,mod=self.mod))
+                    share1.append(Share(a,c-mod_val,mod=self.mod,fp_prec=self.fpp))
+                    share2.append(Share(b,a-mod_val,mod=self.mod,fp_prec=self.fpp))
+                    share3.append(Share(c,b-mod_val,mod=self.mod,fp_prec=self.fpp))
             
         return (share1,share2,share3)
 

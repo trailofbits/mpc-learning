@@ -15,12 +15,24 @@ MOD = 622288097498926496141095869268883999563096063592498055290461
 #MOD = 24684249032065892333066123534168930441269525239006410135714283699648991959894332868446109170827166448301044689
 
 class Share():
+
+    # setup cache for inverse of 3 and scale for a given modulus
+    # key will be mod, value will be inverse of 3 / scale for that modulus
+    inv3_cache = {}
+    # for scale cache, key will be tuple (mod, scale)
+    scale_cache = {}
+
     def __init__(self, value1, value2, mod=MOD, inv_3=None, fp_prec=12, mod_scale=None):
         self.mod = mod
         if inv_3 != None:
             self.inv_3 = inv_3
         else:
-            self.inv_3 = mod_inverse(3, self.mod)
+            if self.mod not in type(self).inv3_cache:
+                self.inv_3 = mod_inverse(3, self.mod)
+                type(self).inv3_cache[self.mod] = self.inv_3
+            else:
+                self.inv_3 = type(self).inv3_cache[self.mod]
+        
         self.fp = fp_prec
         self.x = value1 % self.mod
         self.a = value2 % self.mod
@@ -28,7 +40,11 @@ class Share():
         if mod_scale != None:
             self.mod_scale = mod_scale
         else:
-            self.mod_scale = mod_inverse(self.scale, self.mod)
+            if (self.mod, self.scale) not in type(self).scale_cache:
+                self.mod_scale = mod_inverse(self.scale, self.mod)
+                type(self).scale_cache[(self.mod,self.scale)] = self.mod_scale
+            else:
+                self.mod_scale = type(self).scale_cache[(self.mod,self.scale)]
 
     def __add__(self,other):
         new_x = (self.x + other.x) % self.mod

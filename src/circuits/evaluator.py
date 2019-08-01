@@ -521,9 +521,10 @@ class SecureEvaluator(Evaluator):
             Dictionary of wire values (key: wire name, value: wire value)
     """
 
-    def __init__(self,circuit,input_gates,output_gates,party_index,oracle,fp_precision=16):
+    def __init__(self,circuit,input_gates,output_gates,party_index,oracle,mod,fp_precision=16):
         #Evaluator.__init__(self,circuit,[],fp_precision=fp_precision)
         self.circuit = circuit
+        self.fpp = fp_precision
         self.scale = 10**fp_precision
         self.party_index = party_index
         self.oracle = oracle
@@ -539,6 +540,8 @@ class SecureEvaluator(Evaluator):
         self.outputs = {}
         for outg in self.output_gates:
             self.outputs[outg.get_id()] = ""
+        
+        self.mod = mod
 
         self.mult_listener = None
         self.oracle_listener = None
@@ -761,7 +764,7 @@ class SecureEvaluator(Evaluator):
         new_r = self._interact_mult(r)
 
         for gout in gate_output:
-            gout.add_input(gid,Share(new_r - r, -2 * new_r - r))
+            gout.add_input(gid,Share(new_r - r, -2 * new_r - r,mod=self.mod,fp_prec=self.fpp))
             if gout.is_ready():
                 self.q.put(gout)
 
@@ -791,7 +794,7 @@ class SecureEvaluator(Evaluator):
 
             new_r = self._interact_mult(r)
 
-            z_vals.append(Share(new_r - r, -2 * new_r - r))
+            z_vals.append(Share(new_r - r, -2 * new_r - r,mod=self.mod,fp_prec=self.fpp))
 
             #self.random_index += 1
             #self.mult_listener = None
@@ -814,7 +817,7 @@ class SecureEvaluator(Evaluator):
         [xvec, yvec] = gate.get_inputs()
         gate_output = self.circuit[gid]
 
-        z_val = Share(0,0)
+        z_val = Share(0,0,mod=self.mod,fp_prec=self.fpp)
 
         for i in range(len(xvec)):
             cur_random_val = self.randomness[self.random_index]
@@ -838,7 +841,7 @@ class SecureEvaluator(Evaluator):
 
             new_r = self.interaction[self.random_index]
             """
-            z_val += Share(new_r - r, -2 * new_r - r)
+            z_val += Share(new_r - r, -2 * new_r - r,mod=self.mod,fp_prec=self.fpp)
 
             self.random_index += 1
 
