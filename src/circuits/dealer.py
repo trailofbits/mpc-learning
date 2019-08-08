@@ -84,6 +84,7 @@ class Dealer():
         self.scale = 10**fp_precision
         self.fpp = fp_precision
         #self.modulus = modulus / self.scale
+        self.mod_bit_size = len(bin(self.mod)[2:])
 
     def generate_randomness(self,number_of_values):
         inputs = []
@@ -91,6 +92,58 @@ class Dealer():
             inputs.append(0)
 
         self.distribute_shares(inputs,random=True)
+
+    def generate_truncate_randomness(self, number_of_truncs):
+        for i in range(number_of_truncs):
+            self._truncate_randomness()
+
+    def _truncate_randomness(self):
+        # need to generate a lot of random values for building blocks
+        # of the truncate protocol
+        
+        # need to generate two random numbers, r2 and r1
+        # and need to make shares of them
+        # also need to generate shares of all the bits of r1
+        
+        r2 = randint(0,math.floor(2**(self.mod_bit_size-1) / self.scale))
+        r1 = randint(0,math.floor(2**(self.mod_bit_size-1) / self.scale))
+        
+        r1_bits = []
+        for bit in bin(r1)[2:]:
+            r1_bits.append(int(bit))
+        
+        # prepend list with 0's to match modulus bit size
+        r1_bits = [0]*(self.mod_bit_size - 1 - len(r1_bits)) + r1_bits
+
+        # pass r2, r1, r1_bits as list to make shares to return list of shares
+        random_vals = [r2, r1] + r1_bits
+
+        r2_r1_shares = self._make_shares(random_vals,random=False)
+
+        # also need to generate shares of 2 random bits for mod2 subprotocol
+        # we actually need to create two shares of the second random bit
+        b2 = randint(0,1)
+        b1 = randint(0,1)
+
+        b2_b1_shares = self._make_shares([b2,b1,b1],random=False)
+
+        # lastly we need to generate shares of 2*mod_bit_size integers
+        s_vals = []
+        r_vals = []
+        for i in range(self.mod_bit_size - 1):
+            s_vals.append(randint(1,math.floor(self.mod / self.scale)))
+            r_vals.append(randint(1,math.floor(self.mod / self.scale)))
+
+        s_shares = self._make_shares(s_vals,random=False)
+        r_shares = self._make_shares(r_vals,random=False)
+
+        for i,party in enumerate(self.parties):
+            shares = {}
+            shares["mod2m"] = r2_r1_shares[i]
+            shares["mod2"] = b2_b1_shares[i]
+            shares["premul"] = {'s': s_shares[i], 'r': r_shares[i]}
+            self._send_truncate_randomness(shares,party)
+        
 
     def distribute_shares(self,inputs, random=False, verbose=False):
         # generate and send shares to each party
@@ -184,3 +237,6 @@ class Dealer():
 
     def _send_randomness(self,shares,receiver):
         receiver.receive_randomness(shares)
+
+    def _send_truncate_randomness(self,shares,receiver):
+        receiver.receive_truncate_randomness(shares)

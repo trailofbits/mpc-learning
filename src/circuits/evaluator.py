@@ -1,9 +1,11 @@
 import numpy as np
 from src.circuits.share import Share
+from src.util.mod import mod_inverse
 from queue import Queue
 import time
 import asyncio
 from threading import Event
+import math
 
 class Evaluator:
     """
@@ -542,9 +544,16 @@ class SecureEvaluator(Evaluator):
             self.outputs[outg.get_id()] = ""
         
         self.mod = mod
+        self.mod_bit_size = len(bin(self.mod)[2:])
 
-        self.mult_listener = None
+        self.interaction_listener = None
         self.oracle_listener = None
+
+        self.truncate_randomness = []
+        self.trunc_index = 0
+
+    def get_truncate_randomness(self, index, rand_type):
+        return self.truncate_randomness[index][rand_type]
 
     def run(self, verbose=False):
         #if self.q.empty():
@@ -683,6 +692,140 @@ class SecureEvaluator(Evaluator):
         for i in range(len(self.randomness)):
             self.interaction[i] = "wait"            
 
+    def receive_truncate_randomness(self, trunc_share_dict):
+        self.truncate_randomness.append(trunc_share_dict)
+
+    def _truncate(self, value, k, m):
+        #print("TRUNC INDEX: " + str(self.trunc_index))
+        a_prime = self._mod2m(value, k, m)
+        self.trunc_index += 1
+        d = value + a_prime.const_mult(-1,scaled=False)
+        return d.const_mult(mod_inverse(2**m,self.mod),scaled=False)
+
+    def _mod2m(self, value, k, m):
+        r2_r1_shares = self.get_truncate_randomness(self.trunc_index,"mod2m")
+        #r2_r1_shares = self.truncate_randomness[self.trunc_index]["mod2m"]
+        r2 = r2_r1_shares[0]
+        r1 = r2_r1_shares[1]
+        r1_bits = r2_r1_shares[2:]
+        #m = len(r1_bits)
+
+        #pre_c = value.const_add(2**(k-1))
+        pre_c = value
+        pre_c += r2.const_mult(2**m,scaled=False)
+        pre_c += r1
+        c = self._reveal(pre_c)
+        c_prime = int(c % 2**m)
+
+        u = self._bit_lt(c_prime, r1_bits)
+        
+        a_prime = r1.const_mult(-1,scaled=False).const_add(c_prime)
+        a_prime += u.const_mult(2**m)
+        return a_prime
+
+    def _bit_lt(self, a, b_bits):
+        d_vals = []
+        a_bits = []
+        for bit in bin(a)[2:]:
+            a_bits.append(int(bit)*self.scale)
+        a_bits = [0]*(len(b_bits) - len(a_bits)) + a_bits
+        
+        for i in range(len(a_bits)):
+            d_val = b_bits[i].const_add(a_bits[i])
+            d_val += b_bits[i].const_mult(-2*a_bits[i])
+            d_vals.append(d_val.const_add(1,scaled=False))
+
+        p_vals = self._premul(d_vals)
+        p_vals.reverse()
+
+        s_vals = []
+        for i in range(len(p_vals)-1):
+            s_val = p_vals[i] + p_vals[i+1].const_mult(-1,scaled=False)
+            s_vals.append(s_val)
+        s_vals.append(p_vals[-1].const_add(-1,scaled=False))
+        a_bits.reverse()
+        #print("real a_bits: " + str(a_bits))
+        s = Share(0,0,mod=self.mod,fp_prec=self.fpp)
+        slen = len(s_vals)
+        for i in range(slen):
+            s += s_vals[i].const_mult(self.scale - a_bits[i])
+        
+        return self._mod2(s,len(b_bits))
+
+    def _mod2(self, value, k):
+        value = value.switch_precision(0)
+        bits = self.get_truncate_randomness(self.trunc_index,"mod2")
+        for i,bit in enumerate(bits):
+            bits[i] = bit.switch_precision(0)
+        #c_pre = value.const_add(2**(k-1))
+        c_pre = value
+        c_pre += bits[0].const_mult(2) + bits[2]
+        c = self._reveal(c_pre)
+        c0 = int(bin(math.floor(c))[-1])
+        a = bits[2].const_add(c0)
+        a += bits[2].const_mult(-2*c0)
+        return a.switch_precision(self.fpp)
+
+    def _premul(self, a_vals):
+        premul_rand = self.get_truncate_randomness(self.trunc_index,"premul")
+        r_vals = premul_rand['r']
+        s_vals = premul_rand['s']
+        u_vals = []
+
+        mod_scale = mod_inverse(self.scale,self.mod)
+
+        for i in range(len(r_vals)):
+            r_val = self._reveal(r_vals[i])
+            s_val = self._reveal(s_vals[i])
+            u_val = (r_val * s_val * mod_scale) % self.mod
+            u_vals.append(u_val)
+
+        u_inv_vals = []
+        for i in range(len(u_vals)):
+            u_val = u_vals[i] * mod_scale % self.mod
+            u_inv_vals.append(mod_inverse(u_val,self.mod) * self.scale)
+
+        v_vals = []
+        for i in range(len(r_vals)-1):
+            v_vals.append(self._multiply(r_vals[i+1],s_vals[i]))
+        
+        w_vals = []
+        w_vals.append(r_vals[0])
+        for i in range(len(v_vals)):
+            w_val = v_vals[i].const_mult(u_inv_vals[i])
+            w_vals.append(w_val)
+        
+        z_vals = []
+        for i in range(len(s_vals)):
+            z_val = s_vals[i].const_mult(u_inv_vals[i])
+            z_vals.append(z_val)
+
+        m_vals = []
+        for i in range(len(w_vals)):
+            m_val = self._reveal(w_vals[i]) * self._reveal(a_vals[i]) * mod_scale
+            m_vals.append(m_val % self.mod)
+             
+        p_vals = []
+        p_vals.append(a_vals[0])
+        for i in range(1,len(z_vals)):
+            m_prod = 1 * self.scale
+            for j in range(i+1):
+                m_prod *= m_vals[j] 
+                m_prod *= mod_scale
+            p_vals.append(z_vals[i].const_mult(m_prod))
+        
+        return p_vals
+
+    def _reveal(self, value):
+
+        other_party_value = self._interact(value)
+        if self.party_index == 1:
+            return value.unshare(other_party_value,indices=[1,3])
+        elif self.party_index == 2:
+            return value.unshare(other_party_value,indices=[2,1])
+        elif self.party_index == 3:
+            return value.unshare(other_party_value,indices=[3,2])
+
     def receive_shares(self,shares):
         for share in shares:
             self.input_shares.append(share)
@@ -716,15 +859,15 @@ class SecureEvaluator(Evaluator):
     def _interact_oracle(self):
         pass
 
-    def _interact_mult(self, r_val):
+    def _interact(self, r_val):
         # if self.interaction[rand_index] doesnt equal "wait"
-        # this means that another party already send us a mult value
+        # this means that another party already send us a value
         # so we do not need an async event listener, so it will
         # be set to None
         if self.interaction[self.random_index] == "wait":
-            self.mult_listener = Event()
+            self.interaction_listener = Event()
         else:
-            self.mult_listener = None
+            self.interaction_listener = None
 
         # each party sends value to other party
         if self.party_index == 1:
@@ -736,15 +879,23 @@ class SecureEvaluator(Evaluator):
 
         # if we don't have event listener, we don't have to wait
         # because we already received share from party
-        if self.mult_listener != None:
-            self.mult_listener.wait()
+        if self.interaction_listener != None:
+            self.interaction_listener.wait()
             new_r = self.interaction[self.random_index]
         else:
         # pull new value from self.interaction list
             new_r = self.interaction[self.random_index]
         self.random_index += 1
-        self.mult_listener = None
+        self.interaction_listener = None
         return new_r
+
+    def _multiply(self, share1, share2):
+
+        rand_value = self.randomness[self.random_index]
+        r = share1.pre_mult(share2, rand_value)
+        new_r = self._interact(r)
+
+        return Share(new_r - r, -2* new_r - r, mod=self.mod, fp_prec=self.fpp)
 
     def _mult(self, gate):
         gid = gate.get_id()
@@ -752,33 +903,15 @@ class SecureEvaluator(Evaluator):
         [x,y] = gate.get_inputs()
         gate_output = self.circuit[gid]
 
-        rindex = self.random_index
-        cur_random_val = self.randomness[rindex]
-
-        #x_val = self.wire_dict[x]
-        #y_val = self.wire_dict[y]
-
-        #r = x_val.pre_mult(y_val, cur_random_val)
-        r = x.pre_mult(y, cur_random_val)
-
-        new_r = self._interact_mult(r)
+        z_val = self._multiply(x,y)
 
         for gout in gate_output:
-            gout.add_input(gid,Share(new_r - r, -2 * new_r - r,mod=self.mod,fp_prec=self.fpp))
+            gout.add_input(gid,z_val)
             if gout.is_ready():
                 self.q.put(gout)
 
-        self.random_index += 1
-        self.mult_listener = None
-
     def _smult(self, gate):
         gid = gate.get_id()
-
-        #x,y] = wire_in
-        #[z] = wire_out
-
-        #x_val = self.wire_dict[x]
-        #yvec = self.wire_dict[y]
 
         [x_val, yvec] = gate.get_inputs()
         gate_output = self.circuit[gid]
@@ -786,20 +919,11 @@ class SecureEvaluator(Evaluator):
         z_vals = []
 
         for i in range(len(yvec)):
-            cur_random_val = self.randomness[self.random_index]
-
             y_val = yvec[i]
+            z_val = self._multiply(x_val,y_val)
 
-            r = x_val.pre_mult(y_val, cur_random_val)
+            z_vals.append(z_val)
 
-            new_r = self._interact_mult(r)
-
-            z_vals.append(Share(new_r - r, -2 * new_r - r,mod=self.mod,fp_prec=self.fpp))
-
-            #self.random_index += 1
-            #self.mult_listener = None
-
-        #self.wire_dict[z] = z_vals
         for gout in gate_output:
             gout.add_input(gid, z_vals)
             if gout.is_ready():
@@ -808,44 +932,19 @@ class SecureEvaluator(Evaluator):
     def _dot(self, gate):
         gid = gate.get_id()
 
-        #[x,y] = wire_in
-        #[z] = wire_out
-
-        #xvec = self.wire_dict[x]
-        #yvec = self.wire_dict[y]
-
         [xvec, yvec] = gate.get_inputs()
         gate_output = self.circuit[gid]
 
         z_val = Share(0,0,mod=self.mod,fp_prec=self.fpp)
 
         for i in range(len(xvec)):
-            cur_random_val = self.randomness[self.random_index]
-
             x_val = xvec[i]
             y_val = yvec[i]
 
-            r = x_val.pre_mult(y_val, cur_random_val)
-            new_r = self._interact_mult(r)
-            """
-            if self.party_index == 1:
-                self._send_share(r,2,self.random_index)
-            elif self.party_index == 2:
-                self._send_share(r,3,self.random_index)
-            elif self.party_index == 3:
-                self._send_share(r,1,self.random_index)
-
-            # must wait until we receive share from party
-            while self.interaction[self.random_index] == "wait":
-                pass
-
-            new_r = self.interaction[self.random_index]
-            """
-            z_val += Share(new_r - r, -2 * new_r - r,mod=self.mod,fp_prec=self.fpp)
+            z_val += self._multiply(x_val,y_val)
 
             self.random_index += 1
 
-        #self.wire_dict[z] = z_val
         for gout in gate_output:
             gout.add_input(gid, z_val)
             if gout.is_ready():
@@ -865,25 +964,6 @@ class SecureEvaluator(Evaluator):
             gout.add_input(gid,x.not_op())
             if gout.is_ready():
                 self.q.put(gout)
-
-    def _reveal(self, gate):
-        gid = gate.get_id()
-
-        rindex = self.random_index
-        cur_random_val = self.randomness[rindex]
-
-        num_inputs = len(gate.get_inputs())
-
-        if num_inputs == 2:
-            [x,y] = gate.get_inputs()
-            self.oracle.send_op([x,y],self.party_index,rindex,"REVEAL")
-        else:
-            [x] = gate.get_inputs()
-            self.oracle.send_op([x],self.party_index,rindex,"REVEAL")
-
-        out_val = self.oracle.receive_op(self.party_index,rindex)
-        while out_val == "wait":
-            out_val = self.oracle.receive_op(self.party_index,rindex)
 
     def _comp(self, gate):
         gid = gate.get_id()
@@ -920,17 +1000,12 @@ class SecureEvaluator(Evaluator):
     def _round(self, gate):
         gid = gate.get_id()
 
-        #[x] = wire_in
-        #[z] = wire_out
-
         [xa] = gate.get_inputs()
         gate_output = self.circuit[gid]
 
+        """
         rindex = self.random_index
         cur_random_val = self.randomness[rindex]
-
-        #(x_val,a_val) = self.wire_dict[x]
-        #xa = self.wire_dict[x]
 
         #self.oracle.send_comp([xa],self.party_index,rindex)
         self.oracle.send_op([xa],self.party_index,rindex,"ROUND")
@@ -940,8 +1015,16 @@ class SecureEvaluator(Evaluator):
         while out_val == "wait":
             #out_val = self.oracle.receive_comp(self.party_index,rindex)
             out_val = self.oracle.receive_op(self.party_index,rindex)
+        """
+        k = int((self.mod_bit_size - 1) / 3)
+        m = int((self.mod_bit_size - 1) / 3)
+        if type(xa) is list:
+            out_val = []
+            for share in xa:
+                out_val.append(self._truncate(share, k, m))
+        else:
+            out_val = self._truncate(xa, k, m)
 
-        #self.wire_dict[z] = out_val
         for gout in gate_output:
             gout.add_input(gid, out_val)
             if gout.is_ready():
@@ -1015,8 +1098,8 @@ class SecureEvaluator(Evaluator):
         receiver._receive_party_share(value,random_index)
 
     def _receive_party_share(self, share, random_index):
-        if self.mult_listener != None:
-            self.mult_listener.set()
+        if self.interaction_listener != None:
+            self.interaction_listener.set()
         self.interaction[random_index] = share
 
     def get_outputs(self):

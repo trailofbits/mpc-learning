@@ -45,6 +45,25 @@ class Share():
                 type(self).scale_cache[(self.mod,self.scale)] = self.mod_scale
             else:
                 self.mod_scale = type(self).scale_cache[(self.mod,self.scale)]
+    def switch_precision(self, new_precision):
+        scale = 10**new_precision
+        new_x = (self.x * self.mod_scale * scale) % self.mod
+        new_a = (self.a * self.mod_scale * scale) % self.mod
+        return Share(new_x, new_a, mod=self.mod, fp_prec=new_precision)
+
+    def __eq__(self,other):
+        if type(other) != type(Share(0,0)):
+            return False
+        if self.mod != other.mod:
+            return False
+        if self.fp != other.fp:
+            return False
+        if (self.x % self.mod) != (other.x % self.mod):
+            return False
+        if (self.a % self.mod) != (other.a % self.mod):
+            return False
+        else:
+            return True
 
     def __add__(self,other):
         new_x = (self.x + other.x) % self.mod
@@ -73,14 +92,23 @@ class Share():
             res = res - self.mod
         return res
 
-    def const_mult(self, const_value):
-        new_x = (self.x * const_value * self.mod_scale) % self.mod
-        new_a = (self.a * const_value * self.mod_scale) % self.mod
+    def const_mult(self, const_value, scaled=True):
+        if scaled:
+            new_x = (self.x * const_value * self.mod_scale) % self.mod
+            new_a = (self.a * const_value * self.mod_scale) % self.mod
+        else:
+            new_x = (self.x * const_value) % self.mod
+            new_a = (self.a * const_value) % self.mod
+    
         return Share(new_x, new_a, mod=self.mod, inv_3=self.inv_3, fp_prec=self.fp)
 
-    def const_add(self, const_value):
-        new_x = self.x
-        new_a = (self.a - const_value) % self.mod
+    def const_add(self, const_value, scaled=True):
+        if scaled:
+            new_x = self.x
+            new_a = (self.a - const_value) % self.mod
+        else:
+            new_x = self.x
+            new_a = (self.a - (const_value * self.scale)) % self.mod
         return Share(new_x, new_a, mod=self.mod, inv_3=self.inv_3, fp_prec=self.fp)
 
     def get_x(self):

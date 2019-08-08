@@ -100,8 +100,9 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     dealer.distribute_shares(data3y)
 
     # use dealer to create random values for interactive operations
-    num_randomness = 1000 * num_iterations
+    num_randomness = 10000 * num_iterations
     dealer.generate_randomness(num_randomness)
+    dealer.generate_truncate_randomness(5*num_iterations)
 
     # need to make dimenions of w the same as x
     if initial_w == 0:
@@ -134,7 +135,8 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
         t3.join()
 
     #for a in range(150):
-    #    print("iter " + str(a) + ": " + str(unshare(res[str(a)+"_1"][0],res[str(a)+"_2"][0])))
+    for a in range(5):
+        print("iter " + str(a) + ": " + str(unshare(res[str(a)+"_1"][0],res[str(a)+"_2"][0])))
 
     # extract final outputs, scale them down
     (w,b) = get_w_b(results)
@@ -293,14 +295,15 @@ if __name__ == "__main__":
     #MOD = 10001112223334445556667778889991
 
     # 199 bits
-    #MOD = 622288097498926496141095869268883999563096063592498055290461
+    MOD = 622288097498926496141095869268883999563096063592498055290461
 
-    MOD = 24684249032065892333066123534168930441269525239006410135714283699648991959894332868446109170827166448301044689
+    #MOD = 24684249032065892333066123534168930441269525239006410135714283699648991959894332868446109170827166448301044689
 
     import data.iris_data as iris
 
     data = iris.get_iris_data()
 
-    num_iter = len(data)
+    #num_iter = len(data)
+    num_iter = 5
 
     print(secure_eval_circuit(data,num_iter,MOD,fp_precision=9))
