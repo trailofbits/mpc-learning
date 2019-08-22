@@ -696,11 +696,31 @@ class SecureEvaluator(Evaluator):
         self.truncate_randomness.append(trunc_share_dict)
 
     def _truncate(self, value, k, m):
-        #print("TRUNC INDEX: " + str(self.trunc_index))
+        if self.trunc_index < 10:
+            print("TRUNC INDEX: " + str(self.trunc_index))
+            IN_VAL = self._reveal(value)
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " in val " + str(IN_VAL))
         a_prime = self._mod2m(value, k, m)
+        if self.trunc_index < 10:
+            APR_VAL = self._reveal(a_prime)
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " a prime " + str(APR_VAL))
+            
         self.trunc_index += 1
         d = value + a_prime.const_mult(-1,scaled=False)
-        return d.const_mult(mod_inverse(2**m,self.mod),scaled=False)
+
+        #d = d.const_mult(mod_inverse(2**m,self.mod),scaled=False)
+        d = d.const_mult(mod_inverse(10**7,self.mod),scaled=False)
+
+        #d = d.const_mult(2**m,scaled=False)
+        d = d.const_mult(10**7,scaled=False)
+
+        if self.trunc_index < 10:
+            D_VAL = self._reveal(d)
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " d_val " + str(D_VAL))
+        return d
 
     def _mod2m(self, value, k, m):
         r2_r1_shares = self.get_truncate_randomness(self.trunc_index,"mod2m")
@@ -709,18 +729,43 @@ class SecureEvaluator(Evaluator):
         r1 = r2_r1_shares[1]
         r1_bits = r2_r1_shares[2:]
         #m = len(r1_bits)
-
+        if self.trunc_index < 10:
+            R2_VAL = self._reveal(r2) % self.mod
+            R1_VAL = self._reveal(r1) % self.mod
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " r2: " + str(R2_VAL))
+                print(str(self.trunc_index) + " r1: " + str(R1_VAL))
         #pre_c = value.const_add(2**(k-1))
-        pre_c = value
-        pre_c += r2.const_mult(2**m,scaled=False)
+        pre_c = value.const_add(self.mod)
+        #if self.trunc_index < 10:
+        #    prec1 = self._reveal(pre_c)
+        #    if self.party_index == 1:
+        #        print(str(self.trunc_index) + " prec1: " + str(prec1))
+        
+        #pre_c += r2.const_mult(2**m,scaled=False)
+        pre_c += r2.const_mult(10**7,scaled=False)
+        
         pre_c += r1
         c = self._reveal(pre_c)
-        c_prime = int(c % 2**m)
 
+        #c_prime = int(c % 2**m)
+        c_prime = int(c % 10**7)
+
+        if self.trunc_index < 10:
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " c': " + str(c_prime))
         u = self._bit_lt(c_prime, r1_bits)
         
+        if self.trunc_index < 10:
+            U_VAL = self._reveal(u)
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " u: " + str(U_VAL))
+        
         a_prime = r1.const_mult(-1,scaled=False).const_add(c_prime)
-        a_prime += u.const_mult(2**m)
+
+        #a_prime += u.const_mult(2**m)
+        a_prime += u.const_mult(10**7)
+
         return a_prime
 
     def _bit_lt(self, a, b_bits):
@@ -729,28 +774,71 @@ class SecureEvaluator(Evaluator):
         for bit in bin(a)[2:]:
             a_bits.append(int(bit)*self.scale)
         a_bits = [0]*(len(b_bits) - len(a_bits)) + a_bits
+
+        #if self.party_index == 1:
+        #    print(str(self.trunc_index) + " a bits: " + str(a_bits))
         
+        #B_BITS = []
+        #for bv in b_bits:
+        #    B_BITS.append(self._reveal(bv))
+        
+        #if self.party_index == 1:
+        #    print(str(self.trunc_index) + " b bits: " + str(B_BITS))
+
         for i in range(len(a_bits)):
             d_val = b_bits[i].const_add(a_bits[i])
             d_val += b_bits[i].const_mult(-2*a_bits[i])
-            d_vals.append(d_val.const_add(1,scaled=False))
+            d_vals.append(d_val.const_add(1*self.scale))
+
+        #D_VALS = []
+        #for dv in d_vals:
+        #    D_VALS.append(self._reveal(dv))
+
+        #if self.party_index == 1:
+        #    print(str(self.trunc_index) + " d _vals: " + str(D_VALS))
 
         p_vals = self._premul(d_vals)
         p_vals.reverse()
+
+        #P_VALS = []
+        #for pv in p_vals:
+        #    P_VALS.append(self._reveal(pv))
+
+        #if self.party_index == 1:
+        #    print(str(self.trunc_index) + " p_vals: " + str(P_VALS))
 
         s_vals = []
         for i in range(len(p_vals)-1):
             s_val = p_vals[i] + p_vals[i+1].const_mult(-1,scaled=False)
             s_vals.append(s_val)
         s_vals.append(p_vals[-1].const_add(-1,scaled=False))
+
+        #S_VALS = []
+        #for sv in s_vals:
+        #    S_VALS.append(self._reveal(sv))
+
+        #if self.party_index == 1:
+        #    print(str(self.trunc_index) + " s_vals: " + str(S_VALS))
+
         a_bits.reverse()
         #print("real a_bits: " + str(a_bits))
         s = Share(0,0,mod=self.mod,fp_prec=self.fpp)
         slen = len(s_vals)
         for i in range(slen):
             s += s_vals[i].const_mult(self.scale - a_bits[i])
+
+        #SV = self._reveal(s)
+
+        #if self.party_index == 1:
+        #    print(str(self.trunc_index) + " s val: " + str(SV))
+
+        ret_val = self._mod2(s,len(b_bits))
         
-        return self._mod2(s,len(b_bits))
+        #RET = self._reveal(ret_val)
+        #if self.party_index == 1:
+        #    print(str(self.trunc_index) + " return value (of bitlt): " + str(RET))
+
+        return ret_val
 
     def _mod2(self, value, k):
         value = value.switch_precision(0)
@@ -820,11 +908,11 @@ class SecureEvaluator(Evaluator):
 
         other_party_value = self._interact(value)
         if self.party_index == 1:
-            return value.unshare(other_party_value,indices=[1,3])
+            return value.unshare(other_party_value,indices=[1,3],neg_representation=False)
         elif self.party_index == 2:
-            return value.unshare(other_party_value,indices=[2,1])
+            return value.unshare(other_party_value,indices=[2,1],neg_representation=False)
         elif self.party_index == 3:
-            return value.unshare(other_party_value,indices=[3,2])
+            return value.unshare(other_party_value,indices=[3,2],neg_representation=False)
 
     def receive_shares(self,shares):
         for share in shares:
@@ -1016,15 +1104,35 @@ class SecureEvaluator(Evaluator):
             #out_val = self.oracle.receive_comp(self.party_index,rindex)
             out_val = self.oracle.receive_op(self.party_index,rindex)
         """
-        k = int((self.mod_bit_size - 1) / 3)
-        m = int((self.mod_bit_size - 1) / 3)
+        #k = int((self.mod_bit_size - 1) / 3)
+        #m = int((self.mod_bit_size - 1) / 3)
+        k = 20
+        m = 20
+
+        #if self.party_index == 1:
+        #    print("======")
+        #for xa_val in xa:
+        #    XA_VAL = self._reveal(xa_val)
+        #    if self.party_index == 1:
+        #        print(str(self.party_index) + " trunc input: " + str(XA_VAL))
+
         if type(xa) is list:
             out_val = []
             for share in xa:
-                out_val.append(self._truncate(share, k, m))
+                cur = self._truncate(share, k, m)
+                #CUR_VAL = self._reveal(cur)
+                #if self.party_index == 1:
+                #    print(str(self.party_index) + " trunc out: " + str(CUR_VAL))
+                out_val.append(cur)
+                #out_val.append(self._truncate(share, k, m))
         else:
             out_val = self._truncate(xa, k, m)
-
+            #OV = self._reveal(out_val)
+            #if self.party_index == 1:
+            #        print(str(self.party_index) + " trunc out: " + str(OV))
+                
+        #if self.party_index == 1:
+            #print("=======")
         for gout in gate_output:
             gout.add_input(gid, out_val)
             if gout.is_ready():

@@ -82,14 +82,17 @@ class Share():
         r = r % self.mod
         return (r * self.inv_3) % self.mod
 
-    def unshare(self, other, indices=[1,2]):
+    def unshare(self, other, indices=[1,2],neg_representation=True):
         ind = indices
         if (ind == [1,2]) or (ind == [2,3]) or (ind == [3,1]):
             res = (self.x - other.a) % self.mod
         else:
-            res = (self.a - other.x) % self.mod
-        if res > (self.mod / 2):
-            res = res - self.mod
+            #res = (self.a - other.x) % self.mod
+            res = (other.x - self.a) % self.mod
+        
+        if neg_representation:
+            if res > (self.mod / 2):
+                res = res - self.mod
         return res
 
     def const_mult(self, const_value, scaled=True):

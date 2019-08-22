@@ -28,7 +28,7 @@ def mock_secure_evaluator():
     "value,k,mod,fpp,expected",
     [(1,2,19,0,1),(2,2,19,0,0),(3,5,61,1,10),(3,5,11003,2,100),(8,6,1009,1,0),(19,6,131,0,1)]
 )
-def test_mod2(value,k,mod,fpp,expected):
+def test_mod2(value,k,mod,fpp,expected): 
     scale = 10**fpp
     value = value * scale
 

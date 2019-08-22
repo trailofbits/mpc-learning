@@ -105,8 +105,11 @@ class Dealer():
         # and need to make shares of them
         # also need to generate shares of all the bits of r1
         
-        r2 = randint(0,math.floor(2**(self.mod_bit_size-1) / self.scale))
-        r1 = randint(0,math.floor(2**(self.mod_bit_size-1) / self.scale))
+        #mod2_bit_size = int((self.mod_bit_size - 1) / 3)
+        mod2_bit_size = 20
+
+        r2 = randint(0,math.floor(2**(mod2_bit_size)))
+        r1 = randint(0,math.floor(2**(mod2_bit_size)))
         
         r1_bits = []
         for bit in bin(r1)[2:]:
@@ -119,6 +122,14 @@ class Dealer():
         random_vals = [r2, r1] + r1_bits
 
         r2_r1_shares = self._make_shares(random_vals,random=False)
+
+        (sh1,sh2,sh3) = r2_r1_shares
+        shrs = [sh1,sh2,sh3]
+        for items in shrs:
+            items[0] = items[0].switch_precision(0)
+            items[1] = items[1].switch_precision(0)
+
+        r2_r1_shares = shrs 
 
         # also need to generate shares of 2 random bits for mod2 subprotocol
         # we actually need to create two shares of the second random bit

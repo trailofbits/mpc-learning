@@ -54,9 +54,14 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     circ3 = copy.deepcopy(circ.circuit)
 
     # initialize evaluators
-    evaluator1 = SecureEvaluator(circ1,circ.in_gates,circ.out_gates,1,oracle,modulus)
-    evaluator2 = SecureEvaluator(circ2,circ.in_gates,circ.out_gates,2,oracle,modulus)
-    evaluator3 = SecureEvaluator(circ3,circ.in_gates,circ.out_gates,3,oracle,modulus)
+    evaluator1 = SecureEvaluator(circ1,circ.in_gates,circ.out_gates,1,oracle,modulus,fp_precision=fp_precision)
+    evaluator2 = SecureEvaluator(circ2,circ.in_gates,circ.out_gates,2,oracle,modulus,fp_precision=fp_precision)
+    evaluator3 = SecureEvaluator(circ3,circ.in_gates,circ.out_gates,3,oracle,modulus,fp_precision=fp_precision)
+
+    #evaluator1 = SecureEvaluator(circ1,circ.in_gates,circ.out_gates,1,oracle,modulus)
+    #evaluator2 = SecureEvaluator(circ2,circ.in_gates,circ.out_gates,2,oracle,modulus)
+    #evaluator3 = SecureEvaluator(circ3,circ.in_gates,circ.out_gates,3,oracle,modulus)
+
 
     parties = [evaluator1,evaluator2,evaluator3]
     party_dict = {1: evaluator1, 2: evaluator2, 3: evaluator3}
@@ -119,8 +124,9 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     # compute the circuit, each on their own thread, so they can interact
     res = {}
     for i in range(num_iterations):
+    #for i in range(1):
 
-        #print("iteration: " + str(i))
+        print("iteration: " + str(i))
         
         t1 = Thread(target=run_eval,args=(evaluator1,i,data_len,results,1,modulus,fp_precision,res))
         t2 = Thread(target=run_eval,args=(evaluator2,i,data_len,results,2,modulus,fp_precision,res))
@@ -303,7 +309,7 @@ if __name__ == "__main__":
 
     data = iris.get_iris_data()
 
-    #num_iter = len(data)
-    num_iter = 5
+    num_iter = len(data)
+    #num_iter = 10
 
     print(secure_eval_circuit(data,num_iter,MOD,fp_precision=9))

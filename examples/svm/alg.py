@@ -1,6 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import math
+
+MOD = MOD = 622288097498926496141095869268883999563096063592498055290461
+MOD_BIT_SIZE = len(bin(MOD)[2:])
 
 def svm(data, num_iterations, initial_w=0, initial_b=0, hyper_param=1, fp_precision=16):
 
@@ -50,7 +54,14 @@ def svm(data, num_iterations, initial_w=0, initial_b=0, hyper_param=1, fp_precis
             #print(w)
         else:
             w = (1*scale - learning_rate) / scale * w
-        w = np.array([int(round(el / 10**7)*10**7) for el in w])
+        
+        mod_bit_size = MOD_BIT_SIZE
+        #trunc_val = 2**int((mod_bit_size - 1) / 3)
+        #trunc_val = 2**20
+        trunc_val = 10**7
+
+        #w = np.array([int(round(el / 10**7)*10**7) for el in w])
+        w = np.array([int(math.floor(el / trunc_val)*trunc_val) for el in w])
         #for a in range(len(w)):
         #    w[a] = int(w[a])
         #    print(w[a])
@@ -119,5 +130,5 @@ if __name__ == "__main__":
     data = iris.get_iris_data()
 
     num_iter = len(data)
-    print(svm(data,num_iter,fp_precision=12))
+    print(svm(data,num_iter,fp_precision=9))
     #plot_data_line(data,"")
