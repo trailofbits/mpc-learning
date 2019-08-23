@@ -130,5 +130,5 @@ if __name__ == "__main__":
     data = iris.get_iris_data()
 
     num_iter = len(data)
-    print(svm(data,num_iter,fp_precision=9))
+    print(svm(data,num_iter,fp_precision=10))
     #plot_data_line(data,"")

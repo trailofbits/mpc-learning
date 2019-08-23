@@ -312,4 +312,4 @@ if __name__ == "__main__":
     num_iter = len(data)
     #num_iter = 10
 
-    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=9))
+    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=10))

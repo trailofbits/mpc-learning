@@ -536,9 +536,6 @@ class SecureEvaluator(Evaluator):
         self.output_gates = output_gates
         self.input_shares = []
         self.q = Queue()
-        #for gate in circuit:
-        #    print("loading queue for gate: " + gate.get_id())
-        #    gate.set_queue(self.q)
         self.outputs = {}
         for outg in self.output_gates:
             self.outputs[outg.get_id()] = ""
@@ -556,15 +553,11 @@ class SecureEvaluator(Evaluator):
         return self.truncate_randomness[index][rand_type]
 
     def run(self, verbose=False):
-        #if self.q.empty():
-        #    raise(Exception('Queue empty, no inputs added'))
-
         i = 0
         
         gate = self.q.get()
         while gate != "FIN":
             self._eval_gate(gate, verbose=verbose)
-            #print("gate: " + str(i) + " " + str(gate.get_id()))
             i += 1
             gate = self.q.get()
         
@@ -587,10 +580,6 @@ class SecureEvaluator(Evaluator):
 
     def _eval_gate(self,gate,verbose=False):
             gate_type = gate.get_type()
-            #gate_input = gate.inputs
-            #gate_input = self.circuit[gate]["input"]
-            #gate_output = self.circuit[gate]["output"]
-            #gate_output = self.circuit[gate]
 
             if verbose:
                 print("gate type: " + str(gate_type))
@@ -615,22 +604,16 @@ class SecureEvaluator(Evaluator):
                 print("gate inputs: " + str(ext))
 
             if gate_type == "ADD":
-                #self._add(gate_input,gate_output)
                 self._add(gate)
             elif gate_type == "MULT":
-                #self._mult(gate_input,gate_output)
                 self._mult(gate)
             elif gate_type == "SMULT":
-                #self._smult(gate_input,gate_output)
                 self._smult(gate)
             elif gate_type == "DOT":
-                #self._dot(gate_input,gate_output)
                 self._dot(gate)
             elif gate_type == "NOT":
-                #self._not(gate_input,gate_output)
                 self._not(gate)
             elif gate_type == "COMP":
-                #self._comp(gate_input,gate_output)
                 self._comp(gate)
             elif gate_type == "ROUND":
                 self._round(gate)
@@ -639,8 +622,6 @@ class SecureEvaluator(Evaluator):
             elif gate_type == "CADD":
                 self._cadd(gate)
             elif gate_type == "INPUT":
-                #if gate.get_id() == "in2":
-                #    self._reveal(gate)
                 self._input(gate)
             elif gate_type == "OUTPUT":
                 self._output(gate)
@@ -653,23 +634,13 @@ class SecureEvaluator(Evaluator):
         self.load_inputs(inputs)
 
     def load_inputs(self, inputs):
-        #if 'in2' in inputs:
-        #    print("pid: " + str(self.party_index) + " input: " + str(inputs['in2'][0].get_x()) + ", " + str(inputs['in2'][0].get_a()))
-
         for ing in inputs:
-            #print("loading gate: " + str(ing))
-            #if ing == "in2":
-                #print("before: " + str(self.input_gates[ing].inputs))
-                #print("inputs[ing]: " + str(self.input_shares[-2]))
             self.input_gates[ing].add_input("",inputs[ing])
-            #if ing == "in2":
-                #print("after: " + str(self.input_gates[ing].inputs))
             if self.input_gates[ing].is_ready():
                 self.q.put(self.input_gates[ing])
     
     def load_secure_inputs(self,inputs):
         for ing_key in inputs:
-            #print("key: " + str(ing_key) + " val: " + str(self.input_shares[inputs[ing_key]]))
             inputs[ing_key] = self.input_shares[inputs[ing_key]]
 
         self.load_inputs(inputs)
@@ -702,35 +673,12 @@ class SecureEvaluator(Evaluator):
         else:
             m_val = m
 
-        """
-        if self.trunc_index < 10:
-            print("TRUNC INDEX: " + str(self.trunc_index))
-            IN_VAL = self._reveal(value)
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " in val " + str(IN_VAL))
-        a_prime = self._mod2m(value, k, m, pow2_switch=pow2_switch)
-        if self.trunc_index < 10:
-            APR_VAL = self._reveal(a_prime)
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " a prime " + str(APR_VAL))
-        """
         a_prime = self._mod2m(value, k, m, pow2_switch=pow2_switch)   
 
         self.trunc_index += 1
         d = value + a_prime.const_mult(-1,scaled=False)
-
-        #d = d.const_mult(mod_inverse(2**m,self.mod),scaled=False)
-        #d = d.const_mult(mod_inverse(10**7,self.mod),scaled=False)
         d = d.const_mult(mod_inverse(m_val,self.mod),scaled=False)
 
-        #d = d.const_mult(2**m,scaled=False)
-        #d = d.const_mult(10**7,scaled=False)
-        #d = d.const_mult(m_val,scaled=False)
-
-        if self.trunc_index < 10:
-            D_VAL = self._reveal(d)
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " d_val " + str(D_VAL))
         return d
 
     def _mod2m(self, value, k, m, pow2_switch=False):
@@ -741,54 +689,20 @@ class SecureEvaluator(Evaluator):
             m_val = m
 
         r2_r1_shares = self.get_truncate_randomness(self.trunc_index,"mod2m")
-        #r2_r1_shares = self.truncate_randomness[self.trunc_index]["mod2m"]
         r2 = r2_r1_shares[0]
         r1 = r2_r1_shares[1]
         r1_bits = r2_r1_shares[2:]
-        #m = len(r1_bits)
-        """
-        if self.trunc_index < 10:
-            R2_VAL = self._reveal(r2) % self.mod
-            R1_VAL = self._reveal(r1) % self.mod
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " r2: " + str(R2_VAL))
-                print(str(self.trunc_index) + " r1: " + str(R1_VAL))
-        """
-        #pre_c = value.const_add(2**(k-1))
+        
         pre_c = value.const_add(self.mod)
-        #if self.trunc_index < 10:
-        #    prec1 = self._reveal(pre_c)
-        #    if self.party_index == 1:
-        #        print(str(self.trunc_index) + " prec1: " + str(prec1))
-        
-        #pre_c += r2.const_mult(2**m,scaled=False)
-        #pre_c += r2.const_mult(10**7,scaled=False)
         pre_c += r2.const_mult(m_val,scaled=False)
-        
         pre_c += r1
         c = self._reveal(pre_c)
 
-        #c_prime = int(c % 2**m)
-        #c_prime = int(c % 10**7)
         c_prime = int(c % m_val)
 
-        """
-        if self.trunc_index < 10:
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " c': " + str(c_prime))
-        u = self._bit_lt(c_prime, r1_bits)
-        
-        if self.trunc_index < 10:
-            U_VAL = self._reveal(u)
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " u: " + str(U_VAL))
-        """
         u = self._bit_lt(c_prime, r1_bits)
 
         a_prime = r1.const_mult(-1,scaled=False).const_add(c_prime)
-
-        #a_prime += u.const_mult(2**m)
-        #a_prime += u.const_mult(10**7)
         a_prime += u.const_mult(m_val)
 
         return a_prime
@@ -800,37 +714,13 @@ class SecureEvaluator(Evaluator):
             a_bits.append(int(bit)*self.scale)
         a_bits = [0]*(len(b_bits) - len(a_bits)) + a_bits
 
-        #if self.party_index == 1:
-        #    print(str(self.trunc_index) + " a bits: " + str(a_bits))
-        
-        #B_BITS = []
-        #for bv in b_bits:
-        #    B_BITS.append(self._reveal(bv))
-        
-        #if self.party_index == 1:
-        #    print(str(self.trunc_index) + " b bits: " + str(B_BITS))
-
         for i in range(len(a_bits)):
             d_val = b_bits[i].const_add(a_bits[i])
             d_val += b_bits[i].const_mult(-2*a_bits[i])
             d_vals.append(d_val.const_add(1*self.scale))
 
-        #D_VALS = []
-        #for dv in d_vals:
-        #    D_VALS.append(self._reveal(dv))
-
-        #if self.party_index == 1:
-        #    print(str(self.trunc_index) + " d _vals: " + str(D_VALS))
-
         p_vals = self._premul(d_vals)
         p_vals.reverse()
-
-        #P_VALS = []
-        #for pv in p_vals:
-        #    P_VALS.append(self._reveal(pv))
-
-        #if self.party_index == 1:
-        #    print(str(self.trunc_index) + " p_vals: " + str(P_VALS))
 
         s_vals = []
         for i in range(len(p_vals)-1):
@@ -838,31 +728,15 @@ class SecureEvaluator(Evaluator):
             s_vals.append(s_val)
         s_vals.append(p_vals[-1].const_add(-1,scaled=False))
 
-        #S_VALS = []
-        #for sv in s_vals:
-        #    S_VALS.append(self._reveal(sv))
-
-        #if self.party_index == 1:
-        #    print(str(self.trunc_index) + " s_vals: " + str(S_VALS))
-
         a_bits.reverse()
-        #print("real a_bits: " + str(a_bits))
+
         s = Share(0,0,mod=self.mod,fp_prec=self.fpp)
         slen = len(s_vals)
         for i in range(slen):
             s += s_vals[i].const_mult(self.scale - a_bits[i])
 
-        #SV = self._reveal(s)
-
-        #if self.party_index == 1:
-        #    print(str(self.trunc_index) + " s val: " + str(SV))
-
         ret_val = self._mod2(s,len(b_bits))
         
-        #RET = self._reveal(ret_val)
-        #if self.party_index == 1:
-        #    print(str(self.trunc_index) + " return value (of bitlt): " + str(RET))
-
         return ret_val
 
     def _mod2(self, value, k):
@@ -870,7 +744,7 @@ class SecureEvaluator(Evaluator):
         bits = self.get_truncate_randomness(self.trunc_index,"mod2")
         for i,bit in enumerate(bits):
             bits[i] = bit.switch_precision(0)
-        #c_pre = value.const_add(2**(k-1))
+            
         c_pre = value
         c_pre += bits[0].const_mult(2) + bits[2]
         c = self._reveal(c_pre)
@@ -960,10 +834,8 @@ class SecureEvaluator(Evaluator):
                 gout.add_input(gid, z_vals)
                 if gout.is_ready():
                     self.q.put(gout)
-            #self.wire_dict[z] = z_vals
 
         else:
-            #self.wire_dict[z] = self.wire_dict[x] + self.wire_dict[y]
             for gout in gate_output:
                 gout.add_input(gid, x + y)
                 if gout.is_ready():
@@ -1066,13 +938,9 @@ class SecureEvaluator(Evaluator):
     def _not(self, gate):
         gid = gate.get_id()
 
-        #[x] = wire_in
-        #[z] = wire_out
-
         [x] = gate.get_inputs()
         gate_output = self.circuit[gid]
 
-        #self.wire_dict[z] = self.wire_dict[x].not_op()
         for gout in gate_output:
             gout.add_input(gid,x.not_op())
             if gout.is_ready():
@@ -1081,108 +949,17 @@ class SecureEvaluator(Evaluator):
     def _comp(self, gate):
         gid = gate.get_id()
 
-        #[x] = wire_in
-        #[z] = wire_out
-
         [xa] = gate.get_inputs()
         gate_output = self.circuit[gid]
 
-        rindex = self.random_index
-        cur_random_val = self.randomness[rindex]
-
-        #(x_val,a_val) = self.wire_dict[x]
-        #xa = self.wire_dict[x]
-
-        #self.oracle.send_comp([xa],self.party_index,rindex)
-        #self.oracle.send_op([xa],self.party_index,rindex,"COMP")
-
-        #out_val = self.oracle.receive_comp(self.party_index,rindex)
-        #out_val = self.oracle.receive_op(self.party_index,rindex)
-        #while out_val == "wait":
-            #out_val = self.oracle.receive_comp(self.party_index,rindex)
-            #out_val = self.oracle.receive_op(self.party_index,rindex)
-        """
-        half_mod = int(self.mod / 2)
-        
-        if self.trunc_index < 30:
-            #print("TRUNC INDEX: " + str(self.trunc_index))
-            IN_VAL = self._reveal(xa)
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " COMP in val " + str(IN_VAL))
-                print("real answer: " + str(math.floor(IN_VAL / half_mod)))
-        """
-
         half_mod = self.mod / 2
 
-        #need to do truncate in pieces in order to work
+        # need to do truncate in pieces in order to work
         # take square root and perform truncate twice
         sq_half_mod = math.floor(half_mod**(1/2))
 
         s_val1 = self._truncate(xa, sq_half_mod, sq_half_mod)
         s_val2 = self._truncate(s_val1, sq_half_mod, sq_half_mod)
-
-        #if self.trunc_index < 30:
-        #    test_val = self._truncate(xa, 10**30, 10**30)
-        #    TV = self._reveal(test_val)
-        #    if self.party_index == 1:
-        #        print(str(self.trunc_index) + " test val: " + str(TV))
-
-        #s_val = self._truncate(xa.const_add(half_mod), half_mod, half_mod)
-        #s_val = self._truncate(xa, self.mod_bit_size - 1, self.mod_bit_size - 1, pow2_switch=True)
-
-        """
-        s_val1 = self._truncate(xa, 10**6, 10**6)
-        if self.trunc_index < 30:
-            #print("TRUNC INDEX: " + str(self.trunc_index))
-            SV1 = self._reveal(s_val1)
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " INTERMED SVALUE1 " + str(SV1))
-        s_val2 = self._truncate(s_val1, 10**6, 10**6)
-        if self.trunc_index < 30:
-            #print("TRUNC INDEX: " + str(self.trunc_index))
-            SV2 = self._reveal(s_val2)
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " INTERMED SVALUE2 " + str(SV2))
-        s_val3 = self._truncate(s_val2, 10**6, 10**6)
-        if self.trunc_index < 30:
-            #print("TRUNC INDEX: " + str(self.trunc_index))
-            SV3 = self._reveal(s_val3)
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " INTERMED SVALUE3 " + str(SV3))
-        s_val4 = self._truncate(s_val3, 10**6, 10**6)
-        if self.trunc_index < 30:
-            #print("TRUNC INDEX: " + str(self.trunc_index))
-            SV4 = self._reveal(s_val4)
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " INTERMED SVALUE4 " + str(SV4))
-        s_val5 = self._truncate(s_val4, 5*(10**6), 5*(10**6))
-
-        
-        if self.trunc_index < 30:
-            #print("TRUNC INDEX: " + str(self.trunc_index))
-            SV5 = self._reveal(s_val5)
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " INTERMED SVALUE " + str(SV5))
-        s_val = s_val5.const_mult(-1,scaled=False)
-        
-        if self.trunc_index < 30:
-            #print("TRUNC INDEX: " + str(self.trunc_index))
-            SV = self._reveal(s_val)
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " SVALUE " + str(SV))
-        
-        if self.trunc_index < 30:
-            #print("TRUNC INDEX: " + str(self.trunc_index))
-            SV = self._reveal(s_val1)
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " first! SVALUE " + str(SV))
-
-        if self.trunc_index < 30:
-            #print("TRUNC INDEX: " + str(self.trunc_index))
-            SV = self._reveal(s_val2)
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " FINALLLLL SVALUE " + str(SV))
-        """
 
         # need to invert truncation to get comparison value
         out_val = s_val2.const_mult(-1,scaled=False)
@@ -1190,17 +967,6 @@ class SecureEvaluator(Evaluator):
         # need to scale value back up to fixed-point precision
         out_val = out_val.const_mult(self.scale, scaled=False)
 
-        
-        if self.trunc_index < 30:
-            #print("TRUNC INDEX: " + str(self.trunc_index))
-            OV = self._reveal(out_val)
-            IV = self._reveal(xa)
-            if self.party_index == 1:
-                print(str(self.trunc_index) + " this is final output " + str(OV))
-                print(" given input " + str(IV))
-
-
-        #self.wire_dict[z] = out_val
         for gout in gate_output:
             gout.add_input(gid, out_val)
             if gout.is_ready():
@@ -1214,50 +980,20 @@ class SecureEvaluator(Evaluator):
         [xa] = gate.get_inputs()
         gate_output = self.circuit[gid]
 
-        """
-        rindex = self.random_index
-        cur_random_val = self.randomness[rindex]
-
-        #self.oracle.send_comp([xa],self.party_index,rindex)
-        self.oracle.send_op([xa],self.party_index,rindex,"ROUND")
-
-        #out_val = self.oracle.receive_comp(self.party_index,rindex)
-        out_val = self.oracle.receive_op(self.party_index,rindex)
-        while out_val == "wait":
-            #out_val = self.oracle.receive_comp(self.party_index,rindex)
-            out_val = self.oracle.receive_op(self.party_index,rindex)
-        """
-        #k = int((self.mod_bit_size - 1) / 3)
-        #m = int((self.mod_bit_size - 1) / 3)
         k = 10**7
         m = 10**7
-
-        #if self.party_index == 1:
-        #    print("======")
-        #for xa_val in xa:
-        #    XA_VAL = self._reveal(xa_val)
-        #    if self.party_index == 1:
-        #        print(str(self.party_index) + " trunc input: " + str(XA_VAL))
 
         if type(xa) is list:
             out_val = []
             for share in xa:
                 cur = self._truncate(share, k, m)
                 cur = cur.const_mult(m,scaled=False)
-                #CUR_VAL = self._reveal(cur)
-                #if self.party_index == 1:
-                #    print(str(self.party_index) + " trunc out: " + str(CUR_VAL))
+                
                 out_val.append(cur)
-                #out_val.append(self._truncate(share, k, m))
         else:
             out_val = self._truncate(xa, k, m)
             out_val = out_val.const_mult(m,scaled=False)
-            #OV = self._reveal(out_val)
-            #if self.party_index == 1:
-            #        print(str(self.party_index) + " trunc out: " + str(OV))
-                
-        #if self.party_index == 1:
-            #print("=======")
+            
         for gout in gate_output:
             gout.add_input(gid, out_val)
             if gout.is_ready():
@@ -1306,11 +1042,9 @@ class SecureEvaluator(Evaluator):
     def _input(self, gate):
         gid = gate.get_id()
         [x] = gate.get_inputs()
-        #print("INPUT VAL x: " + str(x))
         gate_output = self.circuit[gid]
         for gout in gate_output:
             gout.add_input(gid, x)
-            #print("IS " + str(gout.get_id()) + " RDY?: " + str(gout.inputs))
             if gout.is_ready():
                 self.q.put(gout)
 
@@ -1338,7 +1072,6 @@ class SecureEvaluator(Evaluator):
     def get_outputs(self):
         outs = []
         for out in self.outputs:
-            #outs.append(self.wire_dict[out])
             outs.append(self.outputs[out])
         return outs
 
