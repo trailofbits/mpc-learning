@@ -695,26 +695,37 @@ class SecureEvaluator(Evaluator):
     def receive_truncate_randomness(self, trunc_share_dict):
         self.truncate_randomness.append(trunc_share_dict)
 
-    def _truncate(self, value, k, m):
+    def _truncate(self, value, k, m, pow2_switch=False):
+
+        if pow2_switch:
+            m_val = 2**m
+        else:
+            m_val = m
+
+        """
         if self.trunc_index < 10:
             print("TRUNC INDEX: " + str(self.trunc_index))
             IN_VAL = self._reveal(value)
             if self.party_index == 1:
                 print(str(self.trunc_index) + " in val " + str(IN_VAL))
-        a_prime = self._mod2m(value, k, m)
+        a_prime = self._mod2m(value, k, m, pow2_switch=pow2_switch)
         if self.trunc_index < 10:
             APR_VAL = self._reveal(a_prime)
             if self.party_index == 1:
                 print(str(self.trunc_index) + " a prime " + str(APR_VAL))
-            
+        """
+        a_prime = self._mod2m(value, k, m, pow2_switch=pow2_switch)   
+
         self.trunc_index += 1
         d = value + a_prime.const_mult(-1,scaled=False)
 
         #d = d.const_mult(mod_inverse(2**m,self.mod),scaled=False)
-        d = d.const_mult(mod_inverse(10**7,self.mod),scaled=False)
+        #d = d.const_mult(mod_inverse(10**7,self.mod),scaled=False)
+        d = d.const_mult(mod_inverse(m_val,self.mod),scaled=False)
 
         #d = d.const_mult(2**m,scaled=False)
-        d = d.const_mult(10**7,scaled=False)
+        #d = d.const_mult(10**7,scaled=False)
+        #d = d.const_mult(m_val,scaled=False)
 
         if self.trunc_index < 10:
             D_VAL = self._reveal(d)
@@ -722,19 +733,27 @@ class SecureEvaluator(Evaluator):
                 print(str(self.trunc_index) + " d_val " + str(D_VAL))
         return d
 
-    def _mod2m(self, value, k, m):
+    def _mod2m(self, value, k, m, pow2_switch=False):
+
+        if pow2_switch:
+            m_val = 2**m
+        else:
+            m_val = m
+
         r2_r1_shares = self.get_truncate_randomness(self.trunc_index,"mod2m")
         #r2_r1_shares = self.truncate_randomness[self.trunc_index]["mod2m"]
         r2 = r2_r1_shares[0]
         r1 = r2_r1_shares[1]
         r1_bits = r2_r1_shares[2:]
         #m = len(r1_bits)
+        """
         if self.trunc_index < 10:
             R2_VAL = self._reveal(r2) % self.mod
             R1_VAL = self._reveal(r1) % self.mod
             if self.party_index == 1:
                 print(str(self.trunc_index) + " r2: " + str(R2_VAL))
                 print(str(self.trunc_index) + " r1: " + str(R1_VAL))
+        """
         #pre_c = value.const_add(2**(k-1))
         pre_c = value.const_add(self.mod)
         #if self.trunc_index < 10:
@@ -743,14 +762,17 @@ class SecureEvaluator(Evaluator):
         #        print(str(self.trunc_index) + " prec1: " + str(prec1))
         
         #pre_c += r2.const_mult(2**m,scaled=False)
-        pre_c += r2.const_mult(10**7,scaled=False)
+        #pre_c += r2.const_mult(10**7,scaled=False)
+        pre_c += r2.const_mult(m_val,scaled=False)
         
         pre_c += r1
         c = self._reveal(pre_c)
 
         #c_prime = int(c % 2**m)
-        c_prime = int(c % 10**7)
+        #c_prime = int(c % 10**7)
+        c_prime = int(c % m_val)
 
+        """
         if self.trunc_index < 10:
             if self.party_index == 1:
                 print(str(self.trunc_index) + " c': " + str(c_prime))
@@ -760,11 +782,14 @@ class SecureEvaluator(Evaluator):
             U_VAL = self._reveal(u)
             if self.party_index == 1:
                 print(str(self.trunc_index) + " u: " + str(U_VAL))
-        
+        """
+        u = self._bit_lt(c_prime, r1_bits)
+
         a_prime = r1.const_mult(-1,scaled=False).const_add(c_prime)
 
         #a_prime += u.const_mult(2**m)
-        a_prime += u.const_mult(10**7)
+        #a_prime += u.const_mult(10**7)
+        a_prime += u.const_mult(m_val)
 
         return a_prime
 
@@ -1069,13 +1094,111 @@ class SecureEvaluator(Evaluator):
         #xa = self.wire_dict[x]
 
         #self.oracle.send_comp([xa],self.party_index,rindex)
-        self.oracle.send_op([xa],self.party_index,rindex,"COMP")
+        #self.oracle.send_op([xa],self.party_index,rindex,"COMP")
 
         #out_val = self.oracle.receive_comp(self.party_index,rindex)
-        out_val = self.oracle.receive_op(self.party_index,rindex)
-        while out_val == "wait":
+        #out_val = self.oracle.receive_op(self.party_index,rindex)
+        #while out_val == "wait":
             #out_val = self.oracle.receive_comp(self.party_index,rindex)
-            out_val = self.oracle.receive_op(self.party_index,rindex)
+            #out_val = self.oracle.receive_op(self.party_index,rindex)
+        """
+        half_mod = int(self.mod / 2)
+        
+        if self.trunc_index < 30:
+            #print("TRUNC INDEX: " + str(self.trunc_index))
+            IN_VAL = self._reveal(xa)
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " COMP in val " + str(IN_VAL))
+                print("real answer: " + str(math.floor(IN_VAL / half_mod)))
+        """
+
+        half_mod = self.mod / 2
+
+        #need to do truncate in pieces in order to work
+        # take square root and perform truncate twice
+        sq_half_mod = math.floor(half_mod**(1/2))
+
+        s_val1 = self._truncate(xa, sq_half_mod, sq_half_mod)
+        s_val2 = self._truncate(s_val1, sq_half_mod, sq_half_mod)
+
+        #if self.trunc_index < 30:
+        #    test_val = self._truncate(xa, 10**30, 10**30)
+        #    TV = self._reveal(test_val)
+        #    if self.party_index == 1:
+        #        print(str(self.trunc_index) + " test val: " + str(TV))
+
+        #s_val = self._truncate(xa.const_add(half_mod), half_mod, half_mod)
+        #s_val = self._truncate(xa, self.mod_bit_size - 1, self.mod_bit_size - 1, pow2_switch=True)
+
+        """
+        s_val1 = self._truncate(xa, 10**6, 10**6)
+        if self.trunc_index < 30:
+            #print("TRUNC INDEX: " + str(self.trunc_index))
+            SV1 = self._reveal(s_val1)
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " INTERMED SVALUE1 " + str(SV1))
+        s_val2 = self._truncate(s_val1, 10**6, 10**6)
+        if self.trunc_index < 30:
+            #print("TRUNC INDEX: " + str(self.trunc_index))
+            SV2 = self._reveal(s_val2)
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " INTERMED SVALUE2 " + str(SV2))
+        s_val3 = self._truncate(s_val2, 10**6, 10**6)
+        if self.trunc_index < 30:
+            #print("TRUNC INDEX: " + str(self.trunc_index))
+            SV3 = self._reveal(s_val3)
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " INTERMED SVALUE3 " + str(SV3))
+        s_val4 = self._truncate(s_val3, 10**6, 10**6)
+        if self.trunc_index < 30:
+            #print("TRUNC INDEX: " + str(self.trunc_index))
+            SV4 = self._reveal(s_val4)
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " INTERMED SVALUE4 " + str(SV4))
+        s_val5 = self._truncate(s_val4, 5*(10**6), 5*(10**6))
+
+        
+        if self.trunc_index < 30:
+            #print("TRUNC INDEX: " + str(self.trunc_index))
+            SV5 = self._reveal(s_val5)
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " INTERMED SVALUE " + str(SV5))
+        s_val = s_val5.const_mult(-1,scaled=False)
+        
+        if self.trunc_index < 30:
+            #print("TRUNC INDEX: " + str(self.trunc_index))
+            SV = self._reveal(s_val)
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " SVALUE " + str(SV))
+        
+        if self.trunc_index < 30:
+            #print("TRUNC INDEX: " + str(self.trunc_index))
+            SV = self._reveal(s_val1)
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " first! SVALUE " + str(SV))
+
+        if self.trunc_index < 30:
+            #print("TRUNC INDEX: " + str(self.trunc_index))
+            SV = self._reveal(s_val2)
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " FINALLLLL SVALUE " + str(SV))
+        """
+
+        # need to invert truncation to get comparison value
+        out_val = s_val2.const_mult(-1,scaled=False)
+
+        # need to scale value back up to fixed-point precision
+        out_val = out_val.const_mult(self.scale, scaled=False)
+
+        
+        if self.trunc_index < 30:
+            #print("TRUNC INDEX: " + str(self.trunc_index))
+            OV = self._reveal(out_val)
+            IV = self._reveal(xa)
+            if self.party_index == 1:
+                print(str(self.trunc_index) + " this is final output " + str(OV))
+                print(" given input " + str(IV))
+
 
         #self.wire_dict[z] = out_val
         for gout in gate_output:
@@ -1106,8 +1229,8 @@ class SecureEvaluator(Evaluator):
         """
         #k = int((self.mod_bit_size - 1) / 3)
         #m = int((self.mod_bit_size - 1) / 3)
-        k = 20
-        m = 20
+        k = 10**7
+        m = 10**7
 
         #if self.party_index == 1:
         #    print("======")
@@ -1120,6 +1243,7 @@ class SecureEvaluator(Evaluator):
             out_val = []
             for share in xa:
                 cur = self._truncate(share, k, m)
+                cur = cur.const_mult(m,scaled=False)
                 #CUR_VAL = self._reveal(cur)
                 #if self.party_index == 1:
                 #    print(str(self.party_index) + " trunc out: " + str(CUR_VAL))
@@ -1127,6 +1251,7 @@ class SecureEvaluator(Evaluator):
                 #out_val.append(self._truncate(share, k, m))
         else:
             out_val = self._truncate(xa, k, m)
+            out_val = out_val.const_mult(m,scaled=False)
             #OV = self._reveal(out_val)
             #if self.party_index == 1:
             #        print(str(self.party_index) + " trunc out: " + str(OV))
