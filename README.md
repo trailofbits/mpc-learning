@@ -1,5 +1,5 @@
 # MPC-learning
-MPC-learning is a Python library for performing multi-party computation on machine learning applications. This library implements the 3-party computation protocol of https://eprint.iacr.org/2016/768.pdf .
+MPC-learning is a Python library for performing multi-party computation on machine learning applications. This library implements the 3-party computation protocol of https://eprint.iacr.org/2016/768.pdf . This library is still in development. As on now, a "dealer" is required to distribute shares of inputs, and the protocol can only be run locally (does not support networking yet).
 
 ## Installation
 This is a quick guide to getting this repo up and running for development.
