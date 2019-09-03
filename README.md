@@ -38,25 +38,25 @@ If everything installed correctly the following examples should work:
     a. raw perceptron algorithm:
 
     ```bash
-    python examples/perceptron/alg.py
+    $ python examples/perceptron/alg.py
     ```
 
     b. mpc perceptron (should be same result as raw algorithm, but will take longer):
 
     ```bash
-    python examples/perceptron/eval_circuit.py
+    $ python examples/perceptron/eval_circuit.py
     ```
 
     c. raw svm algorithm:
 
     ```bash
-    python examples/svm/alg.py
+    $ python examples/svm/alg.py
     ```
 
     d. mpc svm (should be same result as raw algorithm, but will take longer):
-    
+
     ```bash
-    python examples/svm/eval_circuit.py
+    $ python examples/svm/eval_circuit.py
     ```
 
 If you would like to run this library on a different algorithm, you will have to synthesize the corresponding circuit for one iteration of the algorithm. The circuits must be in the correct format. For reference, checkout the perceptron and svm circuits: examples/*/circuit.py
