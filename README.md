@@ -6,8 +6,9 @@ This is a quick guide to getting this repo up and running for development.
 
 0. Clone the library
 
-    '''bash
+    ```bash
     $ git clone https://github.com/trailofbits/mpc-learning
+    ```
 
 1. Download virtualenv.
 
@@ -35,21 +36,25 @@ This is a quick guide to getting this repo up and running for development.
 If everything installed correctly the following examples should work:
 
     a. raw perceptron algorithm:
+
     ```bash
     python examples/perceptron/alg.py
     ```
 
-    b. mpc perceptron (should be same result as raw algorithm, but will take longer)
+    b. mpc perceptron (should be same result as raw algorithm, but will take longer):
+
     ```bash
     python examples/perceptron/eval_circuit.py
     ```
 
-    c. raw svm algorithm
+    c. raw svm algorithm:
+
     ```bash
     python examples/svm/alg.py
     ```
 
-    d. mpc svm (should be same result as raw algorithm, but will take longer)
+    d. mpc svm (should be same result as raw algorithm, but will take longer):
+    
     ```bash
     python examples/svm/eval_circuit.py
     ```
