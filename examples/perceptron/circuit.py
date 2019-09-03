@@ -1,3 +1,6 @@
+from src.circuits.gate import Gate
+from queue import Queue
+
 # this file contains the circuit for one iteration of the perceptron algorithm
 # the circuit is represented via a python dictionary
 # each wire is given a unique ID, and each gate is given a unique ID and label
@@ -60,47 +63,79 @@ gate_order = []
 for i in range(14):
     gate_order.append("g"+str(i))
 
+Q = Queue()
+
+x = Gate("in0","INPUT",[],Q)
+y = Gate("in1","INPUT",[],Q)
+wi = Gate("in2","INPUT",[],Q)
+bi = Gate("in3","INPUT",[],Q)
+
 # gate for dot product of x and w
-circuit["g0"] = {"type": "DOT", "input": [x, wi], "output": ["z0"]}
+g0 = Gate("g0","DOT",[x.get_id(),wi.get_id()],Q)
 
 # gate for adding b to dot product of x and w
-circuit["g1"] = {"type": "ADD", "input": [bi, "z0"], "output": ["z1"]}
+g1 = Gate("g1","ADD",[bi.get_id(),g0.get_id()],Q)
 
 # gate for multiplying y with b + dot(x,w)
-#circuit["g2"] = {"type": "SMULT", "input": [y, "z1"], "output": ["z2"]}
-circuit["g2"] = {"type": "MULT", "input": [y, "z1"], "output": ["z2"]}
+g2 = Gate("g2","MULT",[y.get_id(),g1.get_id()],Q)
 
 # gate for computing y(b + dot(x,w)) <= 0
-circuit["g3"] = {"type": "COMP", "input": ["z2"], "output": ["z3"]}
+g3 = Gate("g3","COMP",[g2.get_id()],Q)
 
 # gate for computing y*x for conditional assignment to w
-circuit["g4"] = {"type": "SMULT", "input": [y, x], "output": ["z4"]}
+g4 = Gate("g4","SMULT",[y.get_id(),x.get_id()],Q)
 
 # gate for computing w + x*y for conditional assignment to w
-circuit["g5"] = {"type": "ADD", "input": [wi, "z4"], "output": ["z5"]}
+g5 = Gate("g5","ADD",[wi.get_id(),g4.get_id()],Q)
 
 # gate for computing b + y for conditional assignment to b
-circuit["g6"] = {"type": "ADD", "input": [bi, y], "output": ["z6"]}
+g6 = Gate("g6","ADD",[bi.get_id(),y.get_id()],Q)
 
 # gate for computing not of if statement
-circuit["g7"] = {"type": "NOT", "input": ["z3"], "output": ["z7"]}
+g7 = Gate("g7","NOT",[g3.get_id()],Q)
 
 # gate for computing if conditional assignment to w
-#circuit["g8"] = {"type": "MULT", "input": ["z3", "z5"], "output": ["z8"]}
-circuit["g8"] = {"type": "SMULT", "input": ["z3", "z5"], "output": ["z8"]}
+g8 = Gate("g8","SMULT",[g3.get_id(),g5.get_id()],Q)
 
 # gate for computing else conditional assignment to w
-#circuit["g9"] = {"type": "MULT", "input": [wi, "z7"], "output": ["z9"]}
-circuit["g9"] = {"type": "SMULT", "input": ["z7", wi], "output": ["z9"]}
+g9 = Gate("g9","SMULT",[g7.get_id(),wi.get_id()],Q)
 
 # gate for computing output for w
-circuit["g10"] = {"type": "ADD", "input": ["z8", "z9"], "output": [wo]}
+g10 = Gate("g10","ADD",[g8.get_id(),g9.get_id()],Q)
 
 # gate for computing if conditional assignment to b
-circuit["g11"] = {"type": "MULT", "input": ["z3", "z6"], "output": ["z10"]}
+g11 = Gate("g11","MULT",[g3.get_id(),g6.get_id()],Q)
 
 # gate for computing else conditional assignment to b
-circuit["g12"] = {"type": "MULT", "input": [bi, "z7"], "output": ["z11"]}
+g12 = Gate("g12","MULT",[bi.get_id(),g7.get_id()],Q)
 
 # gate for computing output for b
-circuit["g13"] = {"type": "ADD", "input": ["z10", "z11"], "output": [bo]}
+g13 = Gate("g13","ADD",[g11.get_id(),g12.get_id()],Q)
+
+# output values
+wo = Gate("out0","OUTPUT",[g10.get_id()],Q)
+bo = Gate("out1","OUTPUT",[g13.get_id()],Q)
+
+circuit = {}
+
+circuit[x.get_id()] = [g0,g4]
+circuit[y.get_id()] = [g2,g4,g6]
+circuit[wi.get_id()] = [g0,g5,g9]
+circuit[bi.get_id()] = [g1,g6,g12]
+circuit[g0.get_id()] = [g1]
+circuit[g1.get_id()] = [g2]
+circuit[g2.get_id()] = [g3]
+circuit[g3.get_id()] = [g7,g8,g11]
+circuit[g4.get_id()] = [g5]
+circuit[g5.get_id()] = [g8]
+circuit[g6.get_id()] = [g11]
+circuit[g7.get_id()] = [g9,g12]
+circuit[g8.get_id()] = [g10]
+circuit[g9.get_id()] = [g10]
+circuit[g10.get_id()] = [wo]
+circuit[g11.get_id()] = [g13]
+circuit[g12.get_id()] = [g13]
+circuit[g13.get_id()] = [bo]
+
+in_gates = [x,y,wi,bi]
+out_gates = [wo,bo]

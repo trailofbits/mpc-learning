@@ -2,86 +2,12 @@ from src.circuits.evaluator import BasicEvaluator
 from src.circuits.evaluator import SecureEvaluator
 from src.circuits.dealer import Dealer
 from src.circuits.oracle import Oracle
-import circuit
-from examples.perceptron import circ
+#import circuit
+from examples.perceptron import circuit as circ
 import numpy as np
 from threading import Thread
 import copy
 import time
-
-def eval_circuit(data,num_iterations,initial_w=0,initial_b=0,fp_precision=16):
-    """
-    Function that evaluates the perceptron circuit using a BasicEvaluator
-
-    Parameters
-    ----------
-    data: iterable
-        Data to be input into the perceptron algorithm (assumed iterable pairs)
-    num_iterations: int
-        Number of iterations that algorithm will run for
-    (optional) initial_w=0: int
-        Initial value of w, parameter of perceptron algorithm
-    (optional) initial_b=0: int
-        Initial value of b, parameter of perceptron algorithm
-    (optional) fp_precision=16: int
-        Fixed point number precision
-
-    Returns
-    -------
-    w: float
-        w value achieved after num_iterations of perceptron
-    b: int
-        b value achieved after num_iterations of perceptron
-    """
-
-    evaluator = BasicEvaluator(circuit.circuit,circuit.gate_order,fp_precision=fp_precision)
-
-    # perceptron circuit in circuit.py uses the following names for wires
-    # x = "input0"
-    # y = "input1"
-    # wi = "input2"
-    # bi = "input3"
-    #
-    # wo = "output0"
-    # bo = "output1"
-
-    start_time = time.time()
-
-    # need to make dimenions of w the same as x
-    if initial_w == 0:
-        first_x = data[0][0]
-        initial_w = np.zeros(len(first_x))
-
-    w = initial_w
-    b = initial_b
-
-    # used fixed point arithmetic, accurate up to fp_precision decimal places
-    # need to scale x,y up by 10^fp_precision
-    # after every mult, numbers will be scaled back down by 10^fp_precision
-    scale = 10**fp_precision
-
-    for i in range(num_iterations):
-
-        (x,y) = data[i]
-        # scale up data to account for fixed point arithmetic
-        x = x*scale
-        y = y*scale
-        cur_input = {}
-        cur_input["input0"] = x
-        cur_input["input1"] = y
-        cur_input["input2"] = w
-        cur_input["input3"] = b
-
-        evaluator.load_inputs(cur_input)
-        evaluator.run()
-
-        [w,b] = evaluator.get_outputs()
-        #if i < 3:
-        #    print(str(w) + ", " + str(b))
-
-    elapsed_time = time.time() - start_time
-    print("elapsed_time: " + str(elapsed_time))
-    return (w / scale,b / scale)
 
 def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_precision=16):
     """
