@@ -68,6 +68,11 @@ def perceptron(data, num_iterations, modulus, initial_w=0, initial_b=0, fp_preci
             w += (y * np_x) / scale
             b += y
 
+        
+        print("iteration: " + str(i))
+        print(w)
+        print(b)
+
 
     w = w / scale
     b = b / scale

@@ -40,17 +40,14 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     # account for fixed point precision
     scale = 10**fp_precision
 
-    # initialize oracle
-    oracle = Oracle(modulus,fp_precision=fp_precision)
-
     circ1 = copy.deepcopy(circ.circuit)
     circ2 = copy.deepcopy(circ.circuit)
     circ3 = copy.deepcopy(circ.circuit)
 
     # initialize evaluators
-    evaluator1 = SecureEvaluator(circ1,circ.in_gates,circ.out_gates,1,oracle,modulus)
-    evaluator2 = SecureEvaluator(circ2,circ.in_gates,circ.out_gates,2,oracle,modulus)
-    evaluator3 = SecureEvaluator(circ3,circ.in_gates,circ.out_gates,3,oracle,modulus)
+    evaluator1 = SecureEvaluator(circ1,circ.in_gates,circ.out_gates,1,modulus)
+    evaluator2 = SecureEvaluator(circ2,circ.in_gates,circ.out_gates,2,modulus)
+    evaluator3 = SecureEvaluator(circ3,circ.in_gates,circ.out_gates,3,modulus)
 
     parties = [evaluator1,evaluator2,evaluator3]
     party_dict = {1: evaluator1, 2: evaluator2, 3: evaluator3}
@@ -94,8 +91,9 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     dealer.distribute_shares(data3y)
 
     # use dealer to create random values for interactive operations
-    num_randomness = 100 * num_iterations
+    num_randomness = 3000 * num_iterations
     dealer.generate_randomness(num_randomness)
+    dealer.generate_truncate_randomness(5*num_iterations)
 
     # need to make dimenions of w the same as x
     if initial_w == 0:
@@ -113,7 +111,8 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     res = {}
     for i in range(num_iterations):
 
-        #print("iteration: " + str(i))
+        if i % 10 == 0:
+            print("iteration: " + str(i))
         
         t1 = Thread(target=run_eval,args=(evaluator1,i,data_len,results,1,fp_precision,res))
         t2 = Thread(target=run_eval,args=(evaluator2,i,data_len,results,2,fp_precision,res))
@@ -127,9 +126,17 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
         t2.join()
         t3.join()
 
-    #print("iter 0: " + str(unshare(res["0_1"][0],res["0_2"][0])) + ", " + str(unshare(res["0_1"][1],res["0_2"][1])))
-    #print("iter 1: " + str(unshare(res["1_1"][0],res["1_2"][0])) + ", " + str(unshare(res["1_1"][1],res["1_2"][1])))
-    #print("iter 2: " + str(unshare(res["2_1"][0],res["2_2"][0])) + ", " + str(unshare(res["2_1"][1],res["2_2"][1])))
+    print("iter 0: " + str(unshare(res["0_1"][0],res["0_2"][0])) + ", " + str(unshare(res["0_1"][1],res["0_2"][1])))
+    print("iter 1: " + str(unshare(res["1_1"][0],res["1_2"][0])) + ", " + str(unshare(res["1_1"][1],res["1_2"][1])))
+    print("iter 2: " + str(unshare(res["2_1"][0],res["2_2"][0])) + ", " + str(unshare(res["2_1"][1],res["2_2"][1])))
+    print("iter 3: " + str(unshare(res["3_1"][0],res["3_2"][0])) + ", " + str(unshare(res["3_1"][1],res["3_2"][1])))
+    print("iter 4: " + str(unshare(res["4_1"][0],res["4_2"][0])) + ", " + str(unshare(res["4_1"][1],res["4_2"][1])))
+    print("iter 5: " + str(unshare(res["5_1"][0],res["5_2"][0])) + ", " + str(unshare(res["5_1"][1],res["5_2"][1])))
+    print("iter 6: " + str(unshare(res["6_1"][0],res["6_2"][0])) + ", " + str(unshare(res["6_1"][1],res["6_2"][1])))
+    print("iter 7: " + str(unshare(res["7_1"][0],res["7_2"][0])) + ", " + str(unshare(res["7_1"][1],res["7_2"][1])))
+
+
+
 
     # extract final outputs, scale them down
     (w,b) = get_w_b(results)
@@ -160,6 +167,7 @@ def unshare(share1,share2):
         res = []
         for i in range(len(share1)):
             res.append(share1[i].unshare(share2[i]))
+            print(share1[i].unshare(share2[i]))
 
     else:
         res = share1.unshare(share2)
@@ -239,7 +247,7 @@ def run_eval(evaluator,iter_num,data_length,results_dict,party_index,fp_precisio
     [w,b] = evaluator.get_outputs()
     evaluator.reset_circuit()
 
-    if iter_num < 3:
+    if iter_num < 10:
         wd[str(iter_num) + "_" + str(party_index)] = [w,b]
 
     #cur_in = {}
@@ -262,4 +270,4 @@ if __name__ == "__main__":
 
     #print(eval_circuit(data,num_iter))
 
-    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=12))
+    print(secure_eval_circuit(data,num_iter,MOD,fp_precision=10))
