@@ -46,17 +46,14 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     # account for fixed point precision
     scale = 10**fp_precision
 
-    # initialize oracle
-    oracle = Oracle(modulus,fp_precision=fp_precision)
-
     circ1 = copy.deepcopy(circ.circuit)
     circ2 = copy.deepcopy(circ.circuit)
     circ3 = copy.deepcopy(circ.circuit)
 
     # initialize evaluators
-    evaluator1 = SecureEvaluator(circ1,circ.in_gates,circ.out_gates,1,oracle,modulus,fp_precision=fp_precision)
-    evaluator2 = SecureEvaluator(circ2,circ.in_gates,circ.out_gates,2,oracle,modulus,fp_precision=fp_precision)
-    evaluator3 = SecureEvaluator(circ3,circ.in_gates,circ.out_gates,3,oracle,modulus,fp_precision=fp_precision)
+    evaluator1 = SecureEvaluator(circ1,circ.in_gates,circ.out_gates,1,modulus,fp_precision=fp_precision)
+    evaluator2 = SecureEvaluator(circ2,circ.in_gates,circ.out_gates,2,modulus,fp_precision=fp_precision)
+    evaluator3 = SecureEvaluator(circ3,circ.in_gates,circ.out_gates,3,modulus,fp_precision=fp_precision)
 
     #evaluator1 = SecureEvaluator(circ1,circ.in_gates,circ.out_gates,1,oracle,modulus)
     #evaluator2 = SecureEvaluator(circ2,circ.in_gates,circ.out_gates,2,oracle,modulus)
@@ -126,7 +123,7 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     for i in range(num_iterations):
     #for i in range(1):
 
-        print("iteration: " + str(i))
+        #print("iteration: " + str(i))
         
         t1 = Thread(target=run_eval,args=(evaluator1,i,data_len,results,1,modulus,fp_precision,res))
         t2 = Thread(target=run_eval,args=(evaluator2,i,data_len,results,2,modulus,fp_precision,res))
@@ -141,8 +138,8 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
         t3.join()
 
     #for a in range(150):
-    for a in range(5):
-        print("iter " + str(a) + ": " + str(unshare(res[str(a)+"_1"][0],res[str(a)+"_2"][0])))
+    #for a in range(5):
+    #    print("iter " + str(a) + ": " + str(unshare(res[str(a)+"_1"][0],res[str(a)+"_2"][0])))
 
     # extract final outputs, scale them down
     (w,b) = get_w_b(results)

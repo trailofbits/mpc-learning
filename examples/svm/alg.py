@@ -67,8 +67,8 @@ def svm(data, num_iterations, initial_w=0, initial_b=0, hyper_param=1, fp_precis
         #    print(w[a])
         #    print(int(w[a]))
 
-        if (i < 150):
-            print("iter " + str(i) + ": " + str(w))
+        #if (i < 150):
+        #    print("iter " + str(i) + ": " + str(w))
         #print(w)
 
         #if 98 <  i < 102:

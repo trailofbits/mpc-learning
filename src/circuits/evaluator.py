@@ -6,6 +6,7 @@ import time
 import asyncio
 from threading import Event
 import math
+from src.util.primality_test import miller_rabin as is_prime
 
 class Evaluator:
     """
@@ -357,29 +358,34 @@ class SecureEvaluator(Evaluator):
 
     Methods
     -------
-    __init__(self,circuit,gate_order,party_index,oracle,fp_precision=16)
+    __init__(self,circuit,input_gates,output_gates,party_index,mod,fp_precision=16)
         Constructor for SecureEvaluator object
         Overrides Evaluator constructor
-        Initializes party_index and oracle
+        Initializes circuit (and in/out gates), party_index, modulus and precision
 
         Parameters
         ----------
         circuit: dictionary
             Circuit to be used to compute function, assumed to be in correct
-            format- i.e. contains the following (key,value) pairs:
-            ("input",<list of input wire names>)
-            ("output",<list of output wire names>)
-            ("wires",<list of intermediate wire names>)
-            (<gate>,dict({"type": <gate-type>, "input": <input wire list>,
-            "output": <output wire list>})) (for each gate in circuit)
-        gate_order: iterable (ordered)
-            Iterable representing the order in which circuit gates should be
-            evaluated. Each gate in gate_order should be a key in the circuit
+            format- i.e. dictionary mapping gate_id's to a list of Gate objects,
+            where the list of Gate objects corresponds to the Gates in which
+            the gate_id is an input for. For example, for addition of two values,
+            we will have two input gates (with ID's in1 and in2). Then our
+            circuit will be a dictionary mapping "in1" and "in2" to [add_gate_ob]
+        input_gates: iterable
+            Iterable representing the input gates of the circuit. This is needed
+            to be able to load the party input shares before evaluating the
+            circuit.
+        output_gates: iterable
+            Iterable representing the output gates of the circuit. This is 
+            needed to be able to extract the final output(s) of the circuit.
         party_index: int
             Integer representing index of evaluator object
             (must be 1, 2, or 3 for current implementation)
-        oracle: oracle object
-            Oracle that will perform computation for MULT, SMULT, DOT, and COMP
+        mod: int
+            Integer representing the modulus to be used in the protocol.
+            This protocol is run on the integers mod p, and so mod must
+            be a prime (and must be big enough for fp_precision).
         (optional) fp_precision=16: int
             Fixed point number precision
 
@@ -402,6 +408,25 @@ class SecureEvaluator(Evaluator):
             computation. According to current protocol, each of the three
             parties will contain a random value x_i such that:
             x_1 + x_2 + x_3 = 0
+
+    receive_truncate_randomness(self, trunc_share_dict):
+        Method for getting specialized random values need to perform
+        truncation. Current iteration receives random values from dealer.
+
+        Parameters
+        ----------
+        trunc_share_dict: dictionary
+            Dictionary with a specific format that will be amenable for
+            the truncation protocol. Specifically, the dictionary will have
+            the following (key,value) pairs (here ss is secret share, 
+            rv is random value, and rb is random bit):
+
+            "mod2m"->[ss of rv 1, ss of rv 2, ss of bits of rv 2]
+                (where the individual bits should be individual elements of list)
+            "mod2"->[ss of rb 1, ss of rb 2]
+            "premul"-> {'s': [ss of rv_1s, ... , ss of rv_ns],
+                        'r': [ss of rv_1r, ... , ss of rv_nr ]}
+                        (here n is bit size of modulus)
 
     receive_shares(self,shares)
         Method for getting shares of input values
@@ -523,13 +548,12 @@ class SecureEvaluator(Evaluator):
             Dictionary of wire values (key: wire name, value: wire value)
     """
 
-    def __init__(self,circuit,input_gates,output_gates,party_index,oracle,mod,fp_precision=16):
+    def __init__(self,circuit,input_gates,output_gates,party_index,mod,fp_precision=16):
         #Evaluator.__init__(self,circuit,[],fp_precision=fp_precision)
         self.circuit = circuit
         self.fpp = fp_precision
         self.scale = 10**fp_precision
         self.party_index = party_index
-        self.oracle = oracle
         self.input_gates = {}
         for ing in input_gates:
             self.input_gates[ing.get_id()] = ing
@@ -540,17 +564,58 @@ class SecureEvaluator(Evaluator):
         for outg in self.output_gates:
             self.outputs[outg.get_id()] = ""
         
-        self.mod = mod
+        if is_prime(mod):
+            self.mod = mod
+        else:
+            raise Exception("Modulus: {} is not prime. Modulus must be prime.".format(mod))
+
+        #self.mod = mod
         self.mod_bit_size = len(bin(self.mod)[2:])
 
         self.interaction_listener = None
-        self.oracle_listener = None
 
         self.truncate_randomness = []
         self.trunc_index = 0
 
-    def get_truncate_randomness(self, index, rand_type):
-        return self.truncate_randomness[index][rand_type]
+    def add_parties(self,parties):
+        self.parties = {}
+        self.parties[self.party_index] = self
+        for pindex in parties:
+            if pindex == self.party_index:
+                continue
+            if pindex in self.parties:
+                raise Exception("Party number: {} already exists".format(pindex))
+            else:
+                self.parties[pindex] = parties[pindex]
+    
+    def receive_randomness(self,random_values):
+        self.randomness = random_values
+        self.random_index = 0
+        self.interaction = {}
+        for i in range(len(self.randomness)):
+            self.interaction[i] = "wait"            
+
+    def receive_truncate_randomness(self, trunc_share_dict):
+        self.truncate_randomness.append(trunc_share_dict)
+
+    def receive_shares(self,shares):
+        for share in shares:
+            self.input_shares.append(share)
+
+    def initialize_state(self, inputs):
+        self.load_inputs(inputs)
+
+    def load_inputs(self, inputs):
+        for ing in inputs:
+            self.input_gates[ing].add_input("",inputs[ing])
+            if self.input_gates[ing].is_ready():
+                self.q.put(self.input_gates[ing])
+    
+    def load_secure_inputs(self,inputs):
+        for ing_key in inputs:
+            inputs[ing_key] = self.input_shares[inputs[ing_key]]
+
+        self.load_inputs(inputs)
 
     def run(self, verbose=False):
         i = 0
@@ -630,41 +695,11 @@ class SecureEvaluator(Evaluator):
             else:
                 raise(Exception('{} is not a valid gate type'.format(gate_type)))
         
-    def initialize_state(self, inputs):
-        self.load_inputs(inputs)
-
-    def load_inputs(self, inputs):
-        for ing in inputs:
-            self.input_gates[ing].add_input("",inputs[ing])
-            if self.input_gates[ing].is_ready():
-                self.q.put(self.input_gates[ing])
     
-    def load_secure_inputs(self,inputs):
-        for ing_key in inputs:
-            inputs[ing_key] = self.input_shares[inputs[ing_key]]
-
-        self.load_inputs(inputs)
-
-    def add_parties(self,parties):
-        self.parties = {}
-        self.parties[self.party_index] = self
-        for pindex in parties:
-            if pindex == self.party_index:
-                continue
-            if pindex in self.parties:
-                raise Exception("Party number: {} already exists".format(pindex))
-            else:
-                self.parties[pindex] = parties[pindex]
-
-    def receive_randomness(self,random_values):
-        self.randomness = random_values
-        self.random_index = 0
-        self.interaction = {}
-        for i in range(len(self.randomness)):
-            self.interaction[i] = "wait"            
-
-    def receive_truncate_randomness(self, trunc_share_dict):
-        self.truncate_randomness.append(trunc_share_dict)
+    def get_truncate_randomness(self, index, rand_type):
+        if index >= len(self.truncate_randomness):
+            raise(Exception('Randomness generated for truncation exhausted. Generate more randomness.'))
+        return self.truncate_randomness[index][rand_type]
 
     def _truncate(self, value, k, m, pow2_switch=False):
 
@@ -813,10 +848,6 @@ class SecureEvaluator(Evaluator):
         elif self.party_index == 3:
             return value.unshare(other_party_value,indices=[3,2],neg_representation=False)
 
-    def receive_shares(self,shares):
-        for share in shares:
-            self.input_shares.append(share)
-
     def _add(self, gate):
         gid = gate.get_id()
 
@@ -840,9 +871,6 @@ class SecureEvaluator(Evaluator):
                 gout.add_input(gid, x + y)
                 if gout.is_ready():
                     self.q.put(gout)
-
-    def _interact_oracle(self):
-        pass
 
     def _interact(self, r_val):
         # if self.interaction[rand_index] doesnt equal "wait"
@@ -876,6 +904,8 @@ class SecureEvaluator(Evaluator):
 
     def _multiply(self, share1, share2):
 
+        if self.random_index >= len(self.randomness):
+            raise Exception('Randomness for multiplicaiton exhausted. Please generate more randomness.')
         rand_value = self.randomness[self.random_index]
         r = share1.pre_mult(share2, rand_value)
         new_r = self._interact(r)
