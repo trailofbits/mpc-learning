@@ -208,6 +208,7 @@ def secure_eval_circuit(data,num_iterations,modulus,initial_w=0,initial_b=0,fp_p
     # extract final outputs, scale them down
     (w,b) = get_w_b(results)
     #return (w / scale, b / scale)
+
     elapsed_time = time.time() - start_time
     print("elapsed time: " + str(elapsed_time))
     return (w,b)
@@ -266,6 +267,7 @@ def get_w_b(w_b_shares):
     w = [w1[0].unshare(w2[0]), w1[1].unshare(w2[1])]
     b = b1.unshare(b2)
 
+    
     return (w,b)
 
 
@@ -332,6 +334,6 @@ if __name__ == "__main__":
 
     num_iter = len(data)
 
-    print(eval_circuit(data,num_iter))
+    #print(eval_circuit(data,num_iter))
 
     print(secure_eval_circuit(data,num_iter,MOD,fp_precision=12))
