@@ -2,6 +2,7 @@
 # ideally the output of this algorithm will match that of the circuit
 
 import numpy as np
+import time
 
 
 def perceptron(data, num_iterations, modulus, initial_w=0, initial_b=0, fp_precision=16):
@@ -49,6 +50,8 @@ def perceptron(data, num_iterations, modulus, initial_w=0, initial_b=0, fp_preci
     # also scale down by 10^fp_precision after every mult
     scale = 10**fp_precision
 
+    start_time = time.time()
+
     for i in range(num_iterations):
         
         np_x = np.array(data[i][0])
@@ -68,6 +71,9 @@ def perceptron(data, num_iterations, modulus, initial_w=0, initial_b=0, fp_preci
 
     w = w / scale
     b = b / scale
+
+    elapsed_time = time.time() - start_time
+    print("elapsed time: " + str(elapsed_time))
 
     return (w, b)
 

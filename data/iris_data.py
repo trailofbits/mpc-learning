@@ -27,7 +27,7 @@ def get_iris_data():
     data = []
 
     # randomize ordering of data
-    np.random.seed(10)
+    np.random.seed(1)
     random_indices = np.random.permutation(size)
 
     for i in range(size):

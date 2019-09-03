@@ -1,5 +1,12 @@
 import numpy as np
 from src.circuits.share import Share
+from src.util.mod import mod_inverse
+from queue import Queue
+import time
+import asyncio
+from threading import Event
+import math
+from src.util.primality_test import miller_rabin as is_prime
 
 class Evaluator:
     """
@@ -351,29 +358,34 @@ class SecureEvaluator(Evaluator):
 
     Methods
     -------
-    __init__(self,circuit,gate_order,party_index,oracle,fp_precision=16)
+    __init__(self,circuit,input_gates,output_gates,party_index,mod,fp_precision=16)
         Constructor for SecureEvaluator object
         Overrides Evaluator constructor
-        Initializes party_index and oracle
+        Initializes circuit (and in/out gates), party_index, modulus and precision
 
         Parameters
         ----------
         circuit: dictionary
             Circuit to be used to compute function, assumed to be in correct
-            format- i.e. contains the following (key,value) pairs:
-            ("input",<list of input wire names>)
-            ("output",<list of output wire names>)
-            ("wires",<list of intermediate wire names>)
-            (<gate>,dict({"type": <gate-type>, "input": <input wire list>,
-            "output": <output wire list>})) (for each gate in circuit)
-        gate_order: iterable (ordered)
-            Iterable representing the order in which circuit gates should be
-            evaluated. Each gate in gate_order should be a key in the circuit
+            format- i.e. dictionary mapping gate_id's to a list of Gate objects,
+            where the list of Gate objects corresponds to the Gates in which
+            the gate_id is an input for. For example, for addition of two values,
+            we will have two input gates (with ID's in1 and in2). Then our
+            circuit will be a dictionary mapping "in1" and "in2" to [add_gate_ob]
+        input_gates: iterable
+            Iterable representing the input gates of the circuit. This is needed
+            to be able to load the party input shares before evaluating the
+            circuit.
+        output_gates: iterable
+            Iterable representing the output gates of the circuit. This is 
+            needed to be able to extract the final output(s) of the circuit.
         party_index: int
             Integer representing index of evaluator object
             (must be 1, 2, or 3 for current implementation)
-        oracle: oracle object
-            Oracle that will perform computation for MULT, SMULT, DOT, and COMP
+        mod: int
+            Integer representing the modulus to be used in the protocol.
+            This protocol is run on the integers mod p, and so mod must
+            be a prime (and must be big enough for fp_precision).
         (optional) fp_precision=16: int
             Fixed point number precision
 
@@ -396,6 +408,25 @@ class SecureEvaluator(Evaluator):
             computation. According to current protocol, each of the three
             parties will contain a random value x_i such that:
             x_1 + x_2 + x_3 = 0
+
+    receive_truncate_randomness(self, trunc_share_dict):
+        Method for getting specialized random values need to perform
+        truncation. Current iteration receives random values from dealer.
+
+        Parameters
+        ----------
+        trunc_share_dict: dictionary
+            Dictionary with a specific format that will be amenable for
+            the truncation protocol. Specifically, the dictionary will have
+            the following (key,value) pairs (here ss is secret share, 
+            rv is random value, and rb is random bit):
+
+            "mod2m"->[ss of rv 1, ss of rv 2, ss of bits of rv 2]
+                (where the individual bits should be individual elements of list)
+            "mod2"->[ss of rb 1, ss of rb 2]
+            "premul"-> {'s': [ss of rv_1s, ... , ss of rv_ns],
+                        'r': [ss of rv_1r, ... , ss of rv_nr ]}
+                        (here n is bit size of modulus)
 
     receive_shares(self,shares)
         Method for getting shares of input values
@@ -499,7 +530,6 @@ class SecureEvaluator(Evaluator):
             Value to be received from other party
         random_index:
             Index representing which random interactive value to use
-
     
     get_outputs(self)
         Getter for outputs of circuit
@@ -518,11 +548,34 @@ class SecureEvaluator(Evaluator):
             Dictionary of wire values (key: wire name, value: wire value)
     """
 
-    def __init__(self,circuit,gate_order,party_index,oracle,fp_precision=16):
-        Evaluator.__init__(self,circuit,gate_order,fp_precision=fp_precision)
+    def __init__(self,circuit,input_gates,output_gates,party_index,mod,fp_precision=16):
+        #Evaluator.__init__(self,circuit,[],fp_precision=fp_precision)
+        self.circuit = circuit
+        self.fpp = fp_precision
+        self.scale = 10**fp_precision
         self.party_index = party_index
-        self.oracle = oracle
+        self.input_gates = {}
+        for ing in input_gates:
+            self.input_gates[ing.get_id()] = ing
+        self.output_gates = output_gates
         self.input_shares = []
+        self.q = Queue()
+        self.outputs = {}
+        for outg in self.output_gates:
+            self.outputs[outg.get_id()] = ""
+        
+        if is_prime(mod):
+            self.mod = mod
+        else:
+            raise Exception("Modulus: {} is not prime. Modulus must be prime.".format(mod))
+
+        #self.mod = mod
+        self.mod_bit_size = len(bin(self.mod)[2:])
+
+        self.interaction_listener = None
+
+        self.truncate_randomness = []
+        self.trunc_index = 0
 
     def add_parties(self,parties):
         self.parties = {}
@@ -534,7 +587,7 @@ class SecureEvaluator(Evaluator):
                 raise Exception("Party number: {} already exists".format(pindex))
             else:
                 self.parties[pindex] = parties[pindex]
-
+    
     def receive_randomness(self,random_values):
         self.randomness = random_values
         self.random_index = 0
@@ -542,166 +595,514 @@ class SecureEvaluator(Evaluator):
         for i in range(len(self.randomness)):
             self.interaction[i] = "wait"            
 
+    def receive_truncate_randomness(self, trunc_share_dict):
+        self.truncate_randomness.append(trunc_share_dict)
+
     def receive_shares(self,shares):
         for share in shares:
             self.input_shares.append(share)
 
+    def initialize_state(self, inputs):
+        self.load_inputs(inputs)
+
+    def load_inputs(self, inputs):
+        for ing in inputs:
+            self.input_gates[ing].add_input("",inputs[ing])
+            if self.input_gates[ing].is_ready():
+                self.q.put(self.input_gates[ing])
+    
     def load_secure_inputs(self,inputs):
-        for wire_key in inputs:
-            inputs[wire_key] = self.input_shares[inputs[wire_key]]
+        for ing_key in inputs:
+            inputs[ing_key] = self.input_shares[inputs[ing_key]]
 
         self.load_inputs(inputs)
 
-    def _add(self, wire_in, wire_out):
-        [x,y] = wire_in
-        [z] = wire_out
+    def run(self, verbose=False):
+        i = 0
+        
+        gate = self.q.get()
+        while gate != "FIN":
+            self._eval_gate(gate, verbose=verbose)
+            i += 1
+            gate = self.q.get()
+        
+    def reset_circuit(self):
+        self._clear_gates()
 
-        if type(self.wire_dict[x]) == list:
+    def _clear_gates(self):
+        # need to remove inputs from input gates
+        for in_id in self.input_gates:
+            self.input_gates[in_id].reset()
+        
+        # also reset all other gates
+        for gid in self.circuit:
+            for gate in self.circuit[gid]:
+                gate.reset()
+
+        self.outputs = {}
+        for outg in self.output_gates:
+            self.outputs[outg.get_id()] = ""
+
+    def _eval_gate(self,gate,verbose=False):
+            gate_type = gate.get_type()
+
+            if verbose:
+                print("gate type: " + str(gate_type))
+                print("gate id: " + str(gate.get_id()))
+                print("party index: " + str(self.party_index))
+                ins = gate.get_inputs()
+                ext = []
+                for element in ins:
+                    if type(element) == int:
+                        ext.append(element)
+                    elif type(element) == list:
+                        el_list = []
+                        for el in element:
+                            x_val = el.get_x()
+                            a_val = el.get_a()
+                            el_list.append((x_val,a_val))
+                        ext.append(el_list)
+                    else:
+                        x_val = element.get_x()
+                        a_val = element.get_a()
+                        ext.append((x_val,a_val))
+                print("gate inputs: " + str(ext))
+
+            if gate_type == "ADD":
+                self._add(gate)
+            elif gate_type == "MULT":
+                self._mult(gate)
+            elif gate_type == "SMULT":
+                self._smult(gate)
+            elif gate_type == "DOT":
+                self._dot(gate)
+            elif gate_type == "NOT":
+                self._not(gate)
+            elif gate_type == "COMP":
+                self._comp(gate)
+            elif gate_type == "ROUND":
+                self._round(gate)
+            elif gate_type == "CMULT":
+                self._cmult(gate)
+            elif gate_type == "CADD":
+                self._cadd(gate)
+            elif gate_type == "INPUT":
+                self._input(gate)
+            elif gate_type == "OUTPUT":
+                self._output(gate)
+                if self._is_run_finished():
+                    self.q.put("FIN")
+            else:
+                raise(Exception('{} is not a valid gate type'.format(gate_type)))
+        
+    
+    def get_truncate_randomness(self, index, rand_type):
+        if index >= len(self.truncate_randomness):
+            raise(Exception('Randomness generated for truncation exhausted. Generate more randomness.'))
+        return self.truncate_randomness[index][rand_type]
+
+    def _truncate(self, value, k, m, pow2_switch=False):
+
+        if pow2_switch:
+            m_val = 2**m
+        else:
+            m_val = m
+
+        a_prime = self._mod2m(value, k, m, pow2_switch=pow2_switch)   
+
+        self.trunc_index += 1
+        d = value + a_prime.const_mult(-1,scaled=False)
+        d = d.const_mult(mod_inverse(m_val,self.mod),scaled=False)
+
+        return d
+
+    def _mod2m(self, value, k, m, pow2_switch=False):
+
+        if pow2_switch:
+            m_val = 2**m
+        else:
+            m_val = m
+
+        r2_r1_shares = self.get_truncate_randomness(self.trunc_index,"mod2m")
+        r2 = r2_r1_shares[0]
+        r1 = r2_r1_shares[1]
+        r1_bits = r2_r1_shares[2:]
+        
+        pre_c = value.const_add(self.mod)
+        pre_c += r2.const_mult(m_val,scaled=False)
+        pre_c += r1
+        c = self._reveal(pre_c)
+
+        c_prime = int(c % m_val)
+
+        u = self._bit_lt(c_prime, r1_bits)
+
+        a_prime = r1.const_mult(-1,scaled=False).const_add(c_prime)
+        a_prime += u.const_mult(m_val)
+
+        return a_prime
+
+    def _bit_lt(self, a, b_bits):
+        d_vals = []
+        a_bits = []
+        for bit in bin(a)[2:]:
+            a_bits.append(int(bit)*self.scale)
+        a_bits = [0]*(len(b_bits) - len(a_bits)) + a_bits
+
+        for i in range(len(a_bits)):
+            d_val = b_bits[i].const_add(a_bits[i])
+            d_val += b_bits[i].const_mult(-2*a_bits[i])
+            d_vals.append(d_val.const_add(1*self.scale))
+
+        p_vals = self._premul(d_vals)
+        p_vals.reverse()
+
+        s_vals = []
+        for i in range(len(p_vals)-1):
+            s_val = p_vals[i] + p_vals[i+1].const_mult(-1,scaled=False)
+            s_vals.append(s_val)
+        s_vals.append(p_vals[-1].const_add(-1,scaled=False))
+
+        a_bits.reverse()
+
+        s = Share(0,0,mod=self.mod,fp_prec=self.fpp)
+        slen = len(s_vals)
+        for i in range(slen):
+            s += s_vals[i].const_mult(self.scale - a_bits[i])
+
+        ret_val = self._mod2(s,len(b_bits))
+        
+        return ret_val
+
+    def _mod2(self, value, k):
+        value = value.switch_precision(0)
+        bits = self.get_truncate_randomness(self.trunc_index,"mod2")
+        for i,bit in enumerate(bits):
+            bits[i] = bit.switch_precision(0)
+            
+        c_pre = value
+        c_pre += bits[0].const_mult(2) + bits[2]
+        c = self._reveal(c_pre)
+        c0 = int(bin(math.floor(c))[-1])
+        a = bits[2].const_add(c0)
+        a += bits[2].const_mult(-2*c0)
+        return a.switch_precision(self.fpp)
+
+    def _premul(self, a_vals):
+        premul_rand = self.get_truncate_randomness(self.trunc_index,"premul")
+        r_vals = premul_rand['r']
+        s_vals = premul_rand['s']
+        u_vals = []
+
+        mod_scale = mod_inverse(self.scale,self.mod)
+
+        for i in range(len(r_vals)):
+            r_val = self._reveal(r_vals[i])
+            s_val = self._reveal(s_vals[i])
+            u_val = (r_val * s_val * mod_scale) % self.mod
+            u_vals.append(u_val)
+
+        u_inv_vals = []
+        for i in range(len(u_vals)):
+            u_val = u_vals[i] * mod_scale % self.mod
+            u_inv_vals.append(mod_inverse(u_val,self.mod) * self.scale)
+
+        v_vals = []
+        for i in range(len(r_vals)-1):
+            v_vals.append(self._multiply(r_vals[i+1],s_vals[i]))
+        
+        w_vals = []
+        w_vals.append(r_vals[0])
+        for i in range(len(v_vals)):
+            w_val = v_vals[i].const_mult(u_inv_vals[i])
+            w_vals.append(w_val)
+        
+        z_vals = []
+        for i in range(len(s_vals)):
+            z_val = s_vals[i].const_mult(u_inv_vals[i])
+            z_vals.append(z_val)
+
+        m_vals = []
+        for i in range(len(w_vals)):
+            m_val = self._reveal(w_vals[i]) * self._reveal(a_vals[i]) * mod_scale
+            m_vals.append(m_val % self.mod)
+             
+        p_vals = []
+        p_vals.append(a_vals[0])
+        for i in range(1,len(z_vals)):
+            m_prod = 1 * self.scale
+            for j in range(i+1):
+                m_prod *= m_vals[j] 
+                m_prod *= mod_scale
+            p_vals.append(z_vals[i].const_mult(m_prod))
+        
+        return p_vals
+
+    def _reveal(self, value):
+
+        other_party_value = self._interact(value)
+        if self.party_index == 1:
+            return value.unshare(other_party_value,indices=[1,3],neg_representation=False)
+        elif self.party_index == 2:
+            return value.unshare(other_party_value,indices=[2,1],neg_representation=False)
+        elif self.party_index == 3:
+            return value.unshare(other_party_value,indices=[3,2],neg_representation=False)
+
+    def _add(self, gate):
+        gid = gate.get_id()
+
+        [x,y] = gate.get_inputs()
+
+        gate_output = self.circuit[gid]
+
+        if type(x) == list:
             z_vals = []
 
-            for i in range(len(self.wire_dict[x])):
-                z_vals.append(self.wire_dict[x][i] + self.wire_dict[y][i])
+            for i in range(len(x)):
+                z_vals.append(x[i] + y[i])
 
-            self.wire_dict[z] = z_vals
+            for gout in gate_output:
+                gout.add_input(gid, z_vals)
+                if gout.is_ready():
+                    self.q.put(gout)
 
         else:
-            self.wire_dict[z] = self.wire_dict[x] + self.wire_dict[y]
+            for gout in gate_output:
+                gout.add_input(gid, x + y)
+                if gout.is_ready():
+                    self.q.put(gout)
 
-    def _mult(self, wire_in, wire_out):
-        [x,y] = wire_in
-        [z] = wire_out
+    def _interact(self, r_val):
+        # if self.interaction[rand_index] doesnt equal "wait"
+        # this means that another party already send us a value
+        # so we do not need an async event listener, so it will
+        # be set to None
+        if self.interaction[self.random_index] == "wait":
+            self.interaction_listener = Event()
+        else:
+            self.interaction_listener = None
 
-        rindex = self.random_index
-        cur_random_val = self.randomness[rindex]
-
-        x_val = self.wire_dict[x]
-        y_val = self.wire_dict[y]
-
-        r = x_val.pre_mult(y_val, cur_random_val)
-
+        # each party sends value to other party
         if self.party_index == 1:
-            self._send_share(r,2,self.random_index)
+            self._send_share(r_val,2,self.random_index)
         elif self.party_index == 2:
-            self._send_share(r,3,self.random_index)
+            self._send_share(r_val,3,self.random_index)
         elif self.party_index == 3:
-            self._send_share(r,1,self.random_index)
+            self._send_share(r_val,1,self.random_index)
 
-        # must wait until we receive share from party
-        while self.interaction[self.random_index] == "wait":
-            pass
-
-        new_r = self.interaction[self.random_index]
-        self.wire_dict[z] = Share(new_r - r, -2 * new_r - r)
+        # if we don't have event listener, we don't have to wait
+        # because we already received share from party
+        if self.interaction_listener != None:
+            self.interaction_listener.wait()
+            new_r = self.interaction[self.random_index]
+        else:
+        # pull new value from self.interaction list
+            new_r = self.interaction[self.random_index]
         self.random_index += 1
+        self.interaction_listener = None
+        return new_r
 
-    def _smult(self, wire_in, wire_out):
-        [x,y] = wire_in
-        [z] = wire_out
+    def _multiply(self, share1, share2):
 
-        x_val = self.wire_dict[x]
-        yvec = self.wire_dict[y]
+        if self.random_index >= len(self.randomness):
+            raise Exception('Randomness for multiplicaiton exhausted. Please generate more randomness.')
+        rand_value = self.randomness[self.random_index]
+        r = share1.pre_mult(share2, rand_value)
+        new_r = self._interact(r)
+
+        return Share(new_r - r, -2* new_r - r, mod=self.mod, fp_prec=self.fpp)
+
+    def _mult(self, gate):
+        gid = gate.get_id()
+
+        [x,y] = gate.get_inputs()
+        gate_output = self.circuit[gid]
+
+        z_val = self._multiply(x,y)
+
+        for gout in gate_output:
+            gout.add_input(gid,z_val)
+            if gout.is_ready():
+                self.q.put(gout)
+
+    def _smult(self, gate):
+        gid = gate.get_id()
+
+        [x_val, yvec] = gate.get_inputs()
+        gate_output = self.circuit[gid]
 
         z_vals = []
 
         for i in range(len(yvec)):
-            cur_random_val = self.randomness[self.random_index]
-
             y_val = yvec[i]
+            z_val = self._multiply(x_val,y_val)
 
-            r = x_val.pre_mult(y_val, cur_random_val)
+            z_vals.append(z_val)
 
-            if self.party_index == 1:
-                self._send_share(r,2,self.random_index)
-            elif self.party_index == 2:
-                self._send_share(r,3,self.random_index)
-            elif self.party_index == 3:
-                self._send_share(r,1,self.random_index)
+        for gout in gate_output:
+            gout.add_input(gid, z_vals)
+            if gout.is_ready():
+                self.q.put(gout)
 
-            # must wait until we receive share from party
-            while self.interaction[self.random_index] == "wait":
-                pass
+    def _dot(self, gate):
+        gid = gate.get_id()
 
-            new_r = self.interaction[self.random_index]
-            z_vals.append(Share(new_r - r, -2 * new_r - r))
+        [xvec, yvec] = gate.get_inputs()
+        gate_output = self.circuit[gid]
 
-            self.random_index += 1
-
-        self.wire_dict[z] = z_vals
-
-    def _dot(self, wire_in, wire_out):
-        [x,y] = wire_in
-        [z] = wire_out
-
-        xvec = self.wire_dict[x]
-        yvec = self.wire_dict[y]
-
-        z_val = Share(0,0)
+        z_val = Share(0,0,mod=self.mod,fp_prec=self.fpp)
 
         for i in range(len(xvec)):
-            cur_random_val = self.randomness[self.random_index]
-
             x_val = xvec[i]
             y_val = yvec[i]
 
-            r = x_val.pre_mult(y_val, cur_random_val)
-
-            if self.party_index == 1:
-                self._send_share(r,2,self.random_index)
-            elif self.party_index == 2:
-                self._send_share(r,3,self.random_index)
-            elif self.party_index == 3:
-                self._send_share(r,1,self.random_index)
-
-            # must wait until we receive share from party
-            while self.interaction[self.random_index] == "wait":
-                pass
-
-            new_r = self.interaction[self.random_index]
-            z_val += Share(new_r - r, -2 * new_r - r)
+            z_val += self._multiply(x_val,y_val)
 
             self.random_index += 1
 
-        self.wire_dict[z] = z_val
+        for gout in gate_output:
+            gout.add_input(gid, z_val)
+            if gout.is_ready():
+                self.q.put(gout)
 
-    def _not(self, wire_in, wire_out):
-        [x] = wire_in
-        [z] = wire_out
-        self.wire_dict[z] = self.wire_dict[x].not_op()
+    def _not(self, gate):
+        gid = gate.get_id()
 
-    def _comp(self, wire_in, wire_out):
-        [x] = wire_in
-        [z] = wire_out
+        [x] = gate.get_inputs()
+        gate_output = self.circuit[gid]
 
-        rindex = self.random_index
-        cur_random_val = self.randomness[rindex]
+        for gout in gate_output:
+            gout.add_input(gid,x.not_op())
+            if gout.is_ready():
+                self.q.put(gout)
 
-        #(x_val,a_val) = self.wire_dict[x]
-        xa = self.wire_dict[x]
+    def _comp(self, gate):
+        gid = gate.get_id()
 
-        #self.oracle.send_comp([xa],self.party_index,rindex)
-        self.oracle.send_op([xa],self.party_index,rindex,"COMP")
+        [xa] = gate.get_inputs()
+        gate_output = self.circuit[gid]
 
-        #out_val = self.oracle.receive_comp(self.party_index,rindex)
-        out_val = self.oracle.receive_op(self.party_index,rindex)
-        while out_val == "wait":
-            #out_val = self.oracle.receive_comp(self.party_index,rindex)
-            out_val = self.oracle.receive_op(self.party_index,rindex)
+        half_mod = self.mod / 2
 
-        self.wire_dict[z] = out_val
+        # need to do truncate in pieces in order to work
+        # take square root and perform truncate twice
+        sq_half_mod = math.floor(half_mod**(1/2))
+
+        s_val1 = self._truncate(xa, sq_half_mod, sq_half_mod)
+        s_val2 = self._truncate(s_val1, sq_half_mod, sq_half_mod)
+
+        # need to invert truncation to get comparison value
+        out_val = s_val2.const_mult(-1,scaled=False)
+
+        # need to scale value back up to fixed-point precision
+        out_val = out_val.const_mult(self.scale, scaled=False)
+
+        for gout in gate_output:
+            gout.add_input(gid, out_val)
+            if gout.is_ready():
+                self.q.put(gout)
 
         self.random_index += 1
+
+    def _round(self, gate):
+        gid = gate.get_id()
+
+        [xa] = gate.get_inputs()
+        gate_output = self.circuit[gid]
+
+        k = 10**7
+        m = 10**7
+
+        if type(xa) is list:
+            out_val = []
+            for share in xa:
+                cur = self._truncate(share, k, m)
+                cur = cur.const_mult(m,scaled=False)
+                
+                out_val.append(cur)
+        else:
+            out_val = self._truncate(xa, k, m)
+            out_val = out_val.const_mult(m,scaled=False)
+            
+        for gout in gate_output:
+            gout.add_input(gid, out_val)
+            if gout.is_ready():
+                self.q.put(gout)
+
+        self.random_index += 1
+
+    def _cmult(self, gate):
+        gid = gate.get_id()
+        [x] = gate.get_inputs()
+        [const] = gate.get_const_inputs()
+        gate_output = self.circuit[gid]
+
+        if type(x) == list:
+            out_val = []
+
+            for i in range(len(x)):
+                out_val.append(x[i].const_mult(const))
+        
+        else:
+            out_val = x.const_mult(const)
+
+        for gout in gate_output:
+            gout.add_input(gid, out_val)
+            if gout.is_ready():
+                self.q.put(gout)
+
+    def _cadd(self, gate):
+        gid = gate.get_id()
+        [x] = gate.get_inputs()
+        [const] = gate.get_const_inputs()
+        gate_output = self.circuit[gid]
+
+        if type(x) == list:
+            out_val = []
+            for i in range(len(x)):
+                out_val.append(x[i].const_add(const))
+        else:
+            out_val = x.const_add(const)
+
+        for gout in gate_output:
+            gout.add_input(gid, out_val)
+            if gout.is_ready():
+                self.q.put(gout)
+
+    def _input(self, gate):
+        gid = gate.get_id()
+        [x] = gate.get_inputs()
+        gate_output = self.circuit[gid]
+        for gout in gate_output:
+            gout.add_input(gid, x)
+            if gout.is_ready():
+                self.q.put(gout)
+
+    def _output(self, gate):
+        gid = gate.get_id()
+        [x] = gate.get_inputs()
+        self.outputs[gid] = x
+
+    def _is_run_finished(self):
+        finished = True
+        for out in self.outputs:
+            if self.outputs[out] == "":
+                finished = False
+        return finished
 
     def _send_share(self, value, party_index, random_index):
         receiver = self.parties[party_index]
         receiver._receive_party_share(value,random_index)
 
     def _receive_party_share(self, share, random_index):
+        if self.interaction_listener != None:
+            self.interaction_listener.set()
         self.interaction[random_index] = share
 
     def get_outputs(self):
         outs = []
         for out in self.outputs:
-            outs.append(self.wire_dict[out])
+            outs.append(self.outputs[out])
         return outs
 
     def get_wire_dict(self):
