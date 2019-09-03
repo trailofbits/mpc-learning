@@ -35,25 +35,25 @@ This is a quick guide to getting this repo up and running for development.
 
 If everything installed correctly the following examples should work:
 
-    a. raw perceptron algorithm:
+1. raw perceptron algorithm:
 
     ```bash
     $ python examples/perceptron/alg.py
     ```
 
-    b. mpc perceptron (should be same result as raw algorithm, but will take longer):
+2. mpc perceptron (should be same result as raw algorithm, but will take longer):
 
     ```bash
     $ python examples/perceptron/eval_circuit.py
     ```
 
-    c. raw svm algorithm:
+3. raw svm algorithm:
 
     ```bash
     $ python examples/svm/alg.py
     ```
 
-    d. mpc svm (should be same result as raw algorithm, but will take longer):
+4. mpc svm (should be same result as raw algorithm, but will take longer):
 
     ```bash
     $ python examples/svm/eval_circuit.py
